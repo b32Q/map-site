@@ -69,10 +69,12 @@
   .pin-dest .lbl{position:absolute;left:50%;bottom:50px;transform:translateX(-50%);white-space:nowrap;background:#fff;
     color:var(--text);font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:9px;
     box-shadow:0 6px 16px -6px rgba(11,18,32,.45),0 0 0 1px rgba(16,24,40,.06)}
-  .car{width:34px;height:34px;display:grid;place-items:center}
-  .car i{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--blue);border:3px solid #fff;
-    box-shadow:0 6px 16px -4px rgba(47,107,255,.75)}
-  .car svg{width:16px;height:16px;color:#fff}
+  /* voiture : pastille blanche, flèche bleue — elle se détache du tracé bleu */
+  .car{width:38px;height:38px;display:grid;place-items:center}
+  .car i{display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:#fff;
+    border:1px solid rgba(16,24,40,.14);
+    box-shadow:0 0 0 2px rgba(255,255,255,.85),0 5px 16px -3px rgba(11,18,32,.42)}
+  .car svg{width:20px;height:20px;color:var(--blue)}
   .rarrow{width:13px;height:13px;display:grid;place-items:center;filter:drop-shadow(0 1px 1.5px rgba(11,18,32,.5))}
   .rarrow svg{width:13px;height:13px;display:block}
   .jam{width:30px;height:30px;border-radius:50%;background:var(--danger);border:2.5px solid #fff;display:grid;place-items:center;box-shadow:0 5px 12px -4px rgba(11,18,32,.5)}
@@ -449,11 +451,13 @@
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
   L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 110 }).addTo(map);
 
+  /* Fond de carte OpenStreetMap uniquement : c'est la même source de données que
+     Valhalla, donc les axes dessinés et le tracé calculé coïncident exactement.
+     Esri (HERE/Garmin) dessine ses routes à partir d'une autre base : le tracé
+     pouvait sembler décalé de quelques mètres, sans qu'il y ait d'erreur de calcul. */
   var TILES = [
-    { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-      attr: 'Fond de carte &copy; Esri, HERE, Garmin, &copy; OpenStreetMap' },
     { url: 'https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap France' },
-    { url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap' }
+    { url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap Deutschland' }
   ];
   var tiles = null, tAt = -1, tErr = 0;
   function useTiles(i) {
@@ -461,7 +465,7 @@
     if (tiles) map.removeLayer(tiles);
     tAt = i; tErr = 0;
     tiles = L.tileLayer(TILES[i].url, {
-      maxZoom: 19, crossOrigin: true, detectRetina: true, attribution: TILES[i].attr,
+      maxZoom: 19, crossOrigin: true, detectRetina: false, attribution: TILES[i].attr,
       updateWhenIdle: false, updateWhenZooming: false, keepBuffer: 6
     }).addTo(map);
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
@@ -1055,6 +1059,24 @@
     setSheetHeight();
   }
 
+  /* épaisseur du trait adaptée au zoom : fine de loin, franche de près, comme sur
+     un GPS — c'est ce qui évite l'effet « ruban posé au-dessus de la chaussée » */
+  function routeWeight(z) {
+    if (z >= 16) return 7;
+    if (z >= 14) return 6.5;
+    if (z >= 12) return 5.5;
+    if (z >= 10) return 4.5;
+    return 4;
+  }
+  function applyRouteWeight() {
+    if (!routeLayer) return;
+    var w = routeWeight(map.getZoom());
+    routeLayer.setStyle({ weight: w });
+    if (casingLayer) casingLayer.setStyle({ weight: w + 3 });
+    altLayers.forEach(function (l) { l.setStyle({ weight: Math.max(3, w - 2) }); });
+  }
+  map.on('zoomend', applyRouteWeight);
+
   function drawRoutes() {
     altLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
     altLayers = [];
@@ -1063,11 +1085,23 @@
     if (!state.routes.length) return;
     state.routes.forEach(function (r, i) {
       if (i === state.sel) return;
-      altLayers.push(L.polyline(r.pts, { color: '#98a2b3', weight: 6, opacity: .85, lineCap: 'round', lineJoin: 'round' }).addTo(map));
+      altLayers.push(L.polyline(r.pts, {
+        color: '#98a2b3', weight: Math.max(3, routeWeight(map.getZoom()) - 2), opacity: .85,
+        lineCap: 'round', lineJoin: 'round', smoothFactor: 0.3, interactive: false
+      }).addTo(map));
     });
     var sel = state.routes[state.sel];
-    casingLayer = L.polyline(sel.pts, { color: '#ffffff', weight: 13, opacity: .95, lineCap: 'round', lineJoin: 'round' }).addTo(map);
-    routeLayer = L.polyline(sel.pts, { color: '#2f6bff', weight: 8, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+    var w = routeWeight(map.getZoom());
+    /* deux traits seulement : le liseré puis la ligne. `smoothFactor` bas pour que le
+       tracé suive fidèlement les points de Valhalla au lieu de couper les virages. */
+    casingLayer = L.polyline(sel.pts, {
+      color: '#ffffff', weight: w + 3, opacity: 1, lineCap: 'round', lineJoin: 'round',
+      smoothFactor: 0.3, interactive: false
+    }).addTo(map);
+    routeLayer = L.polyline(sel.pts, {
+      color: '#2f6bff', weight: w, opacity: 1, lineCap: 'round', lineJoin: 'round',
+      smoothFactor: 0.3, interactive: false
+    }).addTo(map);
     drawArrows(sel);
   }
   function drawArrows(route) {
@@ -1275,6 +1309,7 @@
     stopWatch();
     state.navigating = false;
     state.playing = false;
+    if (carMarker) { map.removeLayer(carMarker); carMarker = null; }   /* la voiture disparaît */
     clearJam();
     hud.classList.remove('on');
     navBar.classList.remove('on');
@@ -1384,11 +1419,21 @@
     }
   }
 
+  /* partie de l'itinéraire qui reste à parcourir, à partir de la position courante */
+  function trimRoute(route, done) {
+    if (!route || !route.pts) return [];
+    if (!(done > 0)) return route.pts;
+    var pts = route.pts, cum = route.cum, i = 1;
+    while (i < cum.length - 1 && cum[i] < done) i++;
+    return [pointAt(pts, cum, Math.min(done, route.length))].concat(pts.slice(i));
+  }
+  var lastTrim = 0;
+
   function setCar(p, deg) {
     if (!carMarker) {
       carMarker = L.marker(p, {
         icon: L.divIcon({
-          className: '', iconSize: [34, 34], iconAnchor: [17, 17],
+          className: '', iconSize: [38, 38], iconAnchor: [19, 19],
           html: '<div class="car"><i style="transform:rotate(' + deg + 'deg)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l7 18-7-4-7 4 7-18z"/></svg></i></div>'
         }),
         zIndexOffset: 900, interactive: false, keyboard: false
@@ -1439,6 +1484,13 @@
 
     if (state.route && state.navigating) {
       var p = live ? [state.fix.lat, state.fix.lon] : pointAt(state.route.pts, state.route.cum, state.traveled);
+      /* on ne garde en bleu que le trajet restant (4 fois par seconde, pas à chaque image) */
+      if (Date.now() - lastTrim > 250) {
+        lastTrim = Date.now();
+        var rest = trimRoute(state.route, state.traveled);
+        if (routeLayer) routeLayer.setLatLngs(rest);
+        if (casingLayer) casingLayer.setLatLngs(rest);
+      }
       var ref = pointAt(state.route.pts, state.route.cum, Math.min(state.route.length, state.traveled + 15));
       setCar(p, (bearing(p, ref) + currentBearing() + 360) % 360);
       keepCarInView(p, ts);
