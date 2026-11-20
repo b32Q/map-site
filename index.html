@@ -432,7 +432,9 @@
   };
 
   var map = L.map('map', {
-    center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false, zoomSnap: .5,
+    center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
+    zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
+    preferCanvas: true, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
     rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
   });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
@@ -449,7 +451,10 @@
     if (i >= TILES.length) return;
     if (tiles) map.removeLayer(tiles);
     tAt = i; tErr = 0;
-    tiles = L.tileLayer(TILES[i].url, { maxZoom: 19, crossOrigin: true, detectRetina: true, attribution: TILES[i].attr }).addTo(map);
+    tiles = L.tileLayer(TILES[i].url, {
+      maxZoom: 19, crossOrigin: true, detectRetina: true, attribution: TILES[i].attr,
+      updateWhenIdle: false, updateWhenZooming: false, keepBuffer: 6
+    }).addTo(map);
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
   }
   useTiles(0);
@@ -481,7 +486,12 @@
   }
 
   function km(m) { return (m / 1000).toFixed(m < 10000 ? 1 : 0).replace('.', ',') + ' km'; }
-  function mins(s) { return Math.max(1, Math.round(s / 60)) + ' min'; }
+  function mins(s) {
+    var m = Math.max(1, Math.round(s / 60));
+    if (m < 60) return m + ' min';
+    var h = Math.floor(m / 60), r = m % 60;
+    return h + ' h' + (r ? ' ' + (r < 10 ? '0' + r : r) : '');
+  }
   function clock(ts) { return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
   function dayLabel(ts) {
     var d = new Date(ts), now = new Date();
