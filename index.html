@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Navigation</title>
 <meta name="theme-color" content="#0d0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -22,7 +22,7 @@
     --blue:#2f6bff;--go:#12b76a;--go-deep:#0b7b46;--warn:#f79009;--danger:#e5484d;--chip:#f2f4f7;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%}
+  html,body{height:100%;overscroll-behavior:none;touch-action:manipulation}
   body{
     margin:0;background:radial-gradient(circle at 50% 0%,#1b202a 0%,#0b0d11 62%);
     font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);
@@ -439,7 +439,9 @@
   var map = L.map('map', {
     center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
     zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
-    preferCanvas: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false,
+    /* dessin vectoriel : le navigateur déplace le tracé avec la carte, sans le recalculer
+       à chaque image — c'est ce qui évite le retard (le tracé « qui tremble ») sur mobile */
+    preferCanvas: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false,
     rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
   });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
@@ -468,12 +470,8 @@
     if (casingLayer) casingLayer.redraw();
     altLayers.forEach(function (l) { if (l.redraw) l.redraw(); });
   }
-  var lastRedraw = 0;
   function redrawSoon() {
-    var now = Date.now();
-    if (now - lastRedraw < 90) return;   /* pas de redessin à chaque image */
-    lastRedraw = now;
-    requestAnimationFrame(redrawRoute);
+    requestAnimationFrame(redrawRoute);   /* au plus un redessin par image */
   }
   map.on('zoom', redrawSoon);
   map.on('zoomend', redrawRoute);
