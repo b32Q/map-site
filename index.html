@@ -53,7 +53,8 @@
 
   #map{position:absolute;inset:0;background:#e9e6df;font-family:inherit;z-index:0}
   .leaflet-container{background:#e9e6df;font-family:inherit}
-  .leaflet-tile-pane{filter:saturate(1.06) brightness(1.02) contrast(1.05)}
+  /* fond façon GPS : végétation en taches pâles, bâti neutre, routes grises lisibles */
+  .leaflet-tile-pane{filter:saturate(.40) brightness(1.06) contrast(1.16)}
   .leaflet-bottom.leaflet-left{bottom:calc(var(--credit,240px) + 2px);transition:bottom .3s cubic-bezier(.22,.68,.24,1)}
   .leaflet-control-attribution{font-size:9.5px!important;background:rgba(255,255,255,.84)!important;color:#8a8f9c!important;padding:2px 7px!important;border-radius:3px!important;margin:0!important}
   .leaflet-control-attribution a{color:#8a8f9c!important;text-decoration:none}
@@ -440,6 +441,7 @@
 
   var map = L.map('map', {
     center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
+    minZoom: 4, maxBounds: [[40.5, -6.8], [52.6, 10.8]], maxBoundsViscosity: 0.35,
     zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
     /* Animation de zoom de Leaflet laissée active : pendant le zoom, tuiles et tracé sont
        agrandis par la même transformation CSS, donc le tracé ne peut pas se désolidariser
@@ -662,7 +664,7 @@
     var vb = state.pos
       ? [state.pos.lon - .4, state.pos.lat - .3, state.pos.lon + .4, state.pos.lat + .3].join(',')
       : '5.60,43.00,6.30,43.35';
-    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1&accept-language=fr' +
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1&accept-language=fr&countrycodes=fr' +
       '&viewbox=' + vb + '&bounded=0&q=' + encodeURIComponent(term);
     return fetch(url).then(function (r) { return r.json(); }).then(function (list) {
       if (seq !== searchSeq) return null;
