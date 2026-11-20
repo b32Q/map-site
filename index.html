@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Navigation</title>
 <meta name="theme-color" content="#0d0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f6bff'/><path d='M16 7l6 15-6-3.5-6 3.5z' fill='%23fff'/></svg>">
 <meta name="description" content="Maquette : recherche d'adresse, itinéraires comparés, véhicule, péages, voie à prendre, guidage vocal, départ planifié.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,7 +47,7 @@
     .notch,.phone::after{display:none}
   }
 
-  #map{position:absolute;inset:0;background:#e9e6df;font-family:inherit;z-index:0}
+  #map{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#e9e6df;font-family:inherit;z-index:0}
   .leaflet-container{background:#e9e6df;font-family:inherit}
   .leaflet-tile-pane{filter:saturate(1.06) brightness(1.02) contrast(1.05)}
   .leaflet-bottom.leaflet-left{bottom:calc(var(--credit,240px) + 2px);transition:bottom .3s cubic-bezier(.22,.68,.24,1)}
@@ -80,7 +83,10 @@
   .search input:focus,.search input:focus-visible{outline:none}
   .search:focus-within{box-shadow:0 12px 30px -12px rgba(11,18,32,.42),0 0 0 2px rgba(47,107,255,.35)}
   .search.picking{box-shadow:0 12px 30px -12px rgba(11,18,32,.42),0 0 0 2px rgba(247,144,9,.55)}
-  .search .x{width:34px;height:34px;border-radius:50%;background:var(--chip);display:none;place-items:center;color:#475467;flex:none}
+  .search .x{width:30px;height:30px;border-radius:50%;background:var(--chip);display:none;place-items:center;color:#475467;flex:none}
+  .search .gear{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#344054;flex:none;background:var(--chip)}
+  .search .gear svg{width:18px;height:18px}
+  .search .gear:hover{background:#e6e9ee}
   .search.filled .x{display:grid}
   .sugg{margin-top:8px;background:#fff;border-radius:14px;overflow-y:auto;box-shadow:0 20px 40px -18px rgba(11,18,32,.45);max-height:300px}
   .sugg[hidden]{display:none}
@@ -94,9 +100,12 @@
   .sugg .empty{padding:14px;font-size:13px;color:var(--muted)}
 
   .sheet{position:absolute;left:0;right:0;bottom:0;z-index:950;background:var(--sheet);border-radius:24px 24px 0 0;
-    box-shadow:0 -18px 40px -22px rgba(11,18,32,.5);padding:8px 18px calc(14px + env(safe-area-inset-bottom));
-    transform:translateY(0);transition:transform .32s cubic-bezier(.22,.68,.24,1);max-height:78%;display:flex;flex-direction:column}
-  .grip{display:block;margin:0 auto 8px;padding:5px 26px;border:0;background:none;cursor:pointer;flex:none}
+    box-shadow:0 -18px 40px -22px rgba(11,18,32,.5);padding:6px 18px calc(14px + env(safe-area-inset-bottom));
+    transform:translateY(0);transition:transform .32s cubic-bezier(.22,.68,.24,1);max-height:78%;display:flex;flex-direction:column;
+    will-change:transform}
+  .sheet.dragging{transition:none!important}
+  .grip{display:block;margin:0 auto 6px;padding:9px 46px 7px;border:0;background:none;cursor:grab;flex:none;touch-action:none}
+  .grip:active{cursor:grabbing}
   .grip span{display:block;width:40px;height:4px;border-radius:2px;background:#dfe3ea;transition:background .2s}
   .grip:hover span{background:#c7ccd6}
   .sum{display:none;align-items:center;gap:10px;margin:6px 0 2px}
@@ -106,6 +115,8 @@
   .sheet.compact .sum{display:flex}
   .sheet.compact .details,.sheet.compact .sub,.sheet.compact .chipbtn,.sheet.compact .planline{display:none}
   .sheet.compact{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .sheet.closed-lede .sheet-body{pointer-events:none;opacity:0}
+  .sheet.closed-lede h2,.sheet.closed-lede .sum,.sheet.closed-lede .chipbtn{display:none}
   .sheet.compact h2{margin-bottom:0}
   .sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch}
   .sheet h2{font-size:18px;font-weight:600;margin:0 0 2px;letter-spacing:-.01em}
@@ -118,11 +129,18 @@
     border-radius:999px;padding:4px 10px;margin-top:7px}
 
   .favs{display:grid;gap:2px;margin-top:8px}
-  .fav{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+  .fav{display:flex;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid var(--line);width:100%;text-align:left}
+  .fav-main{display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left}
+  .fav-del{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#98a2b3;flex:none}
+  .fav-del:hover{background:var(--chip);color:#475467}
+  .linkbtn{display:block;margin:10px auto 0;font-size:12px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+  .more-avoids[hidden]{display:none}
+  .more-avoids{padding-top:2px}
   .fav:last-child{border-bottom:0}
   .fav .ico{width:34px;height:34px;border-radius:10px;background:var(--chip);display:grid;place-items:center;flex:none}
   .fav .ico svg{width:17px;height:17px;color:#344054}
-  .fav .t{display:block;font-size:14.5px;font-weight:500}
+  .fav .t{display:block;font-size:14.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fav .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fav .s{display:block;font-size:11.5px;color:var(--muted);margin-top:1px}
   .fav .chev{margin-left:auto;color:#c3c8d2;display:grid;place-items:center}
 
@@ -134,12 +152,19 @@
   .rcard .line{display:flex;align-items:baseline;gap:8px}
   .rcard .dur{font-size:17px;font-weight:700;letter-spacing:-.01em}
   .rcard .dur.best{color:var(--go-deep)}
-  .rcard .meta{font-size:11.5px;color:var(--muted)}
+  .rcard .meta{font-size:11.5px;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rcard .line{min-width:0}
   .rcard .tag{font-size:10.5px;font-weight:600;color:#344054;background:var(--chip);border-radius:99px;padding:3px 8px;display:inline-block;margin-top:5px}
   .rcard .tag.best{color:var(--go-deep);background:#e6f8ee}
   .rcard .eta{font-size:11px;color:var(--muted);text-align:right}
   .rcard .eta b{display:block;font-size:13.5px;color:var(--text)}
   .note1{font-size:11.5px;line-height:1.45;color:var(--muted);margin:9px 0 0}
+  .facts{display:flex;align-items:baseline;gap:10px;margin:12px 0 0;flex-wrap:wrap}
+  .facts .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .facts .sep{width:1px;height:15px;background:var(--line);align-self:center}
+  .facts .sm{font-size:12.5px;color:var(--muted)}
+  .facts .tag{font-size:11px;font-weight:600;border-radius:99px;padding:3px 9px;display:inline-flex;align-items:center;gap:5px}
+  .facts .tag i{width:6px;height:6px;border-radius:50%;background:var(--go);display:block}
   .go{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;height:50px;margin-top:12px;border-radius:14px;
     background:linear-gradient(180deg,#19c476,#0fa25f);color:#fff;font-size:15.5px;font-weight:600;
     box-shadow:0 12px 24px -12px rgba(15,162,95,.9)}
@@ -166,6 +191,9 @@
   .hud .t1{font-size:14px;font-weight:600;line-height:1.3;margin:0}
   .hud .t2{font-size:11.5px;color:rgba(255,255,255,.62);margin:3px 0 0;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .hud .lane{background:rgba(255,255,255,.14);border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:600;color:#fff}
+  .hud .t3{font-size:10.5px;color:rgba(255,255,255,.45);margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hud-bar{position:absolute;left:15px;right:15px;bottom:7px;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
+  .hud-bar i{display:block;height:100%;width:0;background:#4ade80;border-radius:2px;transition:width .5s linear}
 
   .navbar{position:absolute;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:950;background:#fff;
     border-radius:18px;padding:11px 13px;display:flex;align-items:center;gap:9px;
@@ -179,6 +207,17 @@
   .navbar .ic svg{width:18px;height:18px}
   .navbar .stop{width:40px;height:40px;border-radius:12px;background:#feecec;color:var(--danger);display:grid;place-items:center;flex:none}
   .navbar .stop svg{width:17px;height:17px}
+  .report-menu{
+    position:absolute;right:12px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:955;
+    background:#fff;border-radius:16px;padding:6px;width:236px;
+    box-shadow:0 22px 44px -20px rgba(11,18,32,.55),0 0 0 1px rgba(16,24,40,.06);
+  }
+  .report-menu[hidden]{display:none}
+  .report-menu button{display:flex;gap:11px;align-items:center;width:100%;text-align:left;padding:10px 11px;border-radius:11px}
+  .report-menu button:hover{background:var(--chip)}
+  .report-menu svg{width:17px;height:17px;color:#475467;flex:none}
+  .report-menu b{display:block;font-size:13.5px;font-weight:600}
+  .report-menu i{display:block;font-size:11px;color:var(--muted);font-style:normal}
 
 
   .banner{position:absolute;top:96px;left:14px;right:14px;z-index:945;background:#fff5e8;border:1px solid #ffd9a8;color:#8a4b00;
@@ -187,7 +226,7 @@
   .banner.on{transform:translateY(0);opacity:1;visibility:visible}
   .banner svg{width:16px;height:16px;flex:none;margin-top:1px}
 
-  .toast{position:absolute;left:50%;bottom:calc(var(--sheet-h,220px) + 22px);transform:translate(-50%,10px);z-index:980;
+  .toast{position:absolute;left:50%;bottom:max(calc(var(--sheet-h,220px) + 22px), 100px);transform:translate(-50%,10px);z-index:980;
     background:rgba(11,18,32,.92);color:#fff;font-size:12.5px;padding:9px 14px;border-radius:11px;opacity:0;visibility:hidden;
     transition:all .25s ease;white-space:nowrap;max-width:92%}
   .toast.on{opacity:1;visibility:visible;transform:translate(-50%,0)}
@@ -196,17 +235,17 @@
   .ovl{position:absolute;inset:0;z-index:1100;background:rgba(11,18,32,.42);display:flex;align-items:flex-end;
     opacity:0;visibility:hidden;transition:opacity .2s ease,visibility .2s}
   .ovl.on{opacity:1;visibility:visible}
-  .ovl-card{width:100%;max-height:90%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;
-    padding:14px 18px calc(18px + env(safe-area-inset-bottom));transform:translateY(24px);transition:transform .26s ease}
+  .ovl-card{width:100%;max-height:92%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;
+    padding:12px 18px calc(16px + env(safe-area-inset-bottom));transform:translateY(24px);transition:transform .26s ease}
   .ovl.on .ovl-card{transform:translateY(0)}
   .ovl-head{display:flex;align-items:center;justify-content:space-between}
   .ovl-head h3{font-size:16px;font-weight:600;margin:0}
   .ovl .x{width:32px;height:32px;border-radius:50%;background:var(--chip);display:grid;place-items:center;color:#475467}
-  .sec-title{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:16px 0 3px;font-weight:600}
+  .sec-title{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:14px 0 2px;font-weight:600}
   .seg{display:flex;gap:6px;background:var(--chip);padding:4px;border-radius:12px;margin-top:6px}
   .seg button{flex:1;height:36px;border-radius:9px;font-size:13px;font-weight:500;color:#475467;display:flex;align-items:center;justify-content:center;gap:6px}
   .seg button[aria-pressed="true"]{background:#fff;color:var(--text);box-shadow:0 2px 6px rgba(16,24,40,.12)}
-  .row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}
   .row:last-child{border-bottom:0}
   .row .lab{flex:1;font-size:14px;line-height:1.3}
   .row .hint{display:block;font-size:11px;color:var(--muted);margin-top:1px;font-weight:400}
@@ -236,6 +275,9 @@
         <button class="x" id="clearq" type="button" aria-label="Effacer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:14px;height:14px"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
+        <button class="gear" id="gear" type="button" aria-label="Réglages du trajet">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h9M17 8h3M4 16h4M12 16h8"/><circle cx="15" cy="8" r="2.2"/><circle cx="10" cy="16" r="2.2"/></svg>
+        </button>
       </div>
       <div class="sugg" id="sugg" hidden></div>
     </div>
@@ -246,11 +288,12 @@
     </div>
 
     <div class="fab-col" id="fabcol">
-      <button class="fab" id="voice" type="button" aria-label="Guidage vocal" aria-pressed="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6.5 9H3v6h3.5L11 19V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8.5 8.5 0 0 1 0 12"/></svg>
-      </button>
-      <button class="fab" id="opts-fab" type="button" aria-label="Options du trajet">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.5 19l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.7 7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.1V3a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 16.5 5l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
+      <button class="fab" id="compass" type="button" aria-label="Orientation de la carte">
+        <svg id="compass-needle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3.5l3.2 8.2H8.8L12 3.5z" fill="currentColor" stroke="none"/>
+          <path d="M12 20.5l-3.2-8.2h6.4L12 20.5z" opacity=".28" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="12" r="9.2"/>
+        </svg>
       </button>
       <button class="fab" id="recenter" type="button" aria-label="Recentrer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
@@ -264,7 +307,9 @@
       <div style="min-width:0">
         <p class="t1" id="hud-1">Tournez à droite</p>
         <p class="t2"><span id="hud-2"></span><span class="lane" id="hud-lane" hidden></span></p>
+        <p class="t3" id="hud-3"></p>
       </div>
+      <div class="hud-bar"><i id="hud-prog"></i></div>
     </div>
 
     <div class="navbar" id="navbar">
@@ -273,14 +318,22 @@
         <div class="meta" id="nav-meta">6 min · 3,7 km</div>
       </div>
       <div class="grow"></div>
-      <button class="ic" id="jam" type="button" aria-label="Simuler un bouchon">
+      <button class="ic" id="report-btn" type="button" aria-label="Signaler un problème" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17H2.5L12 3z"/><path d="M12 9v5M12 17.2v.3"/></svg>
-      </button>
-      <button class="ic" id="avoid-here" type="button" aria-label="Éviter la rue actuelle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M6.5 17.5L17.5 6.5"/></svg>
       </button>
       <button class="stop" id="stop" type="button" aria-label="Quitter le guidage">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="report-menu" id="report-menu" hidden>
+      <button type="button" data-report="jam">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17H2.5L12 3z"/><path d="M12 9v5M12 17.2v.3"/></svg>
+        <span><b>Bouchon</b><i>contourner le ralentissement</i></span>
+      </button>
+      <button type="button" data-report="street">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M6.5 17.5L17.5 6.5"/></svg>
+        <span><b>Éviter cette rue</b><i>passer par un autre chemin</i></span>
       </button>
     </div>
 
@@ -337,6 +390,7 @@
           <input class="planinput" type="datetime-local" id="plan-input" aria-label="Heure de départ prévue">
         </div>
         <button class="ghost" id="plan-clear" type="button">Partir maintenant</button>
+        <button class="ghost" id="reset-opts" type="button" style="color:#b42318">Réinitialiser mes préférences</button>
       </div>
     </div>
   </div>
@@ -344,12 +398,26 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <script>
 (function () {
   'use strict';
 
   var VOICE_OK = 'speechSynthesis' in window;
   var RECENT_KEY = 'nav_recent_v1';
+  var PREF_KEY = 'nav_prefs_v1';
+  function loadPrefs() {
+    try {
+      var p = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
+      ['tolls', 'highways', 'ferry', 'tracks', 'voice'].forEach(function (k) {
+        if (typeof p[k] === 'boolean') state.prefs[k] = p[k];
+      });
+      if (p.costing === 'auto' || p.costing === 'bicycle' || p.costing === 'pedestrian') state.prefs.costing = p.costing;
+    } catch (e) {}
+  }
+  function savePrefs() {
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(state.prefs)); } catch (e) {}
+  }
   var FRANCE = [46.6, 2.4];
 
   var state = {
@@ -363,7 +431,10 @@
     recents: []
   };
 
-  var map = L.map('map', { center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false, zoomSnap: .5 });
+  var map = L.map('map', {
+    center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false, zoomSnap: .5,
+    rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
+  });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
   L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 110 }).addTo(map);
 
@@ -382,6 +453,10 @@
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
   }
   useTiles(0);
+  map.on('rotate', updateNeedle);
+  map.on('rotateend', updateNeedle);
+
+  try { window.__map = map; } catch (e) {}
 
   var me = L.marker(FRANCE, {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }),
@@ -498,7 +573,13 @@
           street: (m.street_names && m.street_names[0]) || ''
         };
       }).filter(function (s) { return s.text; });
-      return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps };
+      var totalD = cum[cum.length - 1];
+      var main = '', bestD = 0;
+      steps.forEach(function (st, i) {
+        var seg = (steps[i + 1] ? steps[i + 1].at : totalD) - st.at;
+        if (st.street && seg > bestD) { bestD = seg; main = st.street; }
+      });
+      return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
     });
   }
 
@@ -517,6 +598,31 @@
         return { name: parts[0].trim(), sub: parts.slice(1, 3).join(',').trim(), lat: parseFloat(p.lat), lon: parseFloat(p.lon) };
       });
     });
+  }
+
+  /* le conteneur est plus grand que l'écran : en rotation, les coins restent couverts */
+  var mapEl = document.getElementById('map');
+  function sizeMap() {
+    var scr = document.querySelector('.screen');
+    var side = Math.ceil((scr.clientWidth + scr.clientHeight) / 1.42);
+    mapEl.style.width = side + 'px';
+    mapEl.style.height = side + 'px';
+    if (map.invalidateSize) map.invalidateSize({ pan: false });
+  }
+
+  state.capUp = false;
+  function updateNeedle() {
+    var needle = document.getElementById('compass-needle');
+    if (needle) needle.style.transform = 'rotate(' + (-currentBearing()) + 'deg)';
+  }
+  function setBearing(b, animate) {
+    if (typeof map.setBearing !== 'function') return;
+    map.setBearing(((b % 360) + 540) % 360 - 180, { animate: animate !== false });
+    var needle = document.getElementById('compass-needle');
+    if (needle) needle.style.transform = 'rotate(' + (-map.getBearing()) + 'deg)';
+  }
+  function currentBearing() {
+    return typeof map.getBearing === 'function' ? map.getBearing() : 0;
   }
 
   var sheet = document.getElementById('sheet');
@@ -548,13 +654,36 @@
   }
   function hideBanner() { bannerEl.classList.remove('on'); }
 
-  function setSheetHeight() {
-    var h = sheet.getBoundingClientRect().height;
-    document.documentElement.style.setProperty('--sheet-h', h + 'px');
-    document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : h + 6) + 'px');
-    fabCol.style.bottom = (state.navigating ? 86 : h + 14) + 'px';
+  var sheetMode = 'open';
+  function sheetH() { return sheet.offsetHeight || 0; }
+  function shownFor(mode) {
+    var h = sheetH();
+    if (mode === 'hidden') return 0;
+    if (mode === 'closed') return 54;
+    if (mode === 'peek') return Math.min(152, h);
+    return h;
   }
-  window.addEventListener('resize', function () { map.invalidateSize(); setSheetHeight(); });
+  function applySheet(px, animate) {
+    var h = sheetH();
+    if (!h) return;
+    px = Math.max(0, Math.min(h, px));
+    sheet.style.transition = animate === false ? 'none' : '';
+    sheet.style.transform = 'translateY(' + Math.round(h - px) + 'px)';
+    document.documentElement.style.setProperty('--sheet-h', Math.round(px) + 'px');
+    document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : Math.round(px) + 6) + 'px');
+    fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14) + 'px';
+  }
+  function setSheetMode(mode, animate) {
+    sheetMode = mode;
+    sheet.classList.toggle('compact', mode === 'peek' || mode === 'closed');
+    sheet.classList.toggle('closed-lede', mode === 'closed');
+    applySheet(shownFor(mode), animate !== false);
+  }
+  function setSheetHeight() {
+    applySheet(shownFor(sheetMode), false);
+    if (state.phase === 'routes') setTimeout(ensurePinVisible, 60);
+  }
+  window.addEventListener('resize', function () { sizeMap(); setSheetHeight(); });
 
   var ICONS = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>',
@@ -621,10 +750,10 @@
       return 'Page ouverte depuis un fichier : le navigateur bloque la localisation. Utilise l’adresse https:// du site.';
     }
     if (state.geoError === 1) {
-      return 'Accès à la position refusé. Clique sur l’icône à gauche de l’adresse (cadenas ou repère), mets « Position » sur Autoriser, puis recharge.';
+      return 'Position refusée. Cadenas à gauche de l’adresse → Position → Autoriser, puis recharge.';
     }
     if (state.geoError === 2) {
-      return 'L’appareil ne donne pas sa position — souvent la localisation est coupée (Windows : Paramètres → Confidentialité → Localisation).';
+      return 'La localisation de l’appareil ne répond pas (Windows : Confidentialité → Localisation).';
     }
     if (state.geoError === 3) return 'La position n’a pas répondu à temps.';
     return 'Position introuvable.';
@@ -655,8 +784,7 @@
         var pos = prov.pick(d);
         if (!pos || isNaN(pos.lat)) throw new Error('vide');
         onFix({ coords: { latitude: pos.lat, longitude: pos.lon, accuracy: 5000, city: pos.city || '' } }, true);
-        banner('Position approximative (d’après le réseau) : ' + (pos.city || 'ville inconnue') +
-          '. Autorise la localisation, ou indique ton départ à la main pour être précis.', 9000);
+        banner('Position approximative : ' + (pos.city || 'ville inconnue') + '. Autorise la localisation pour être précis.', 7000);
       }).catch(next);
     }
     next();
@@ -749,7 +877,7 @@
   function renderHome() {
     state.phase = 'home';
     var h = '<h2>Où va-t-on ?</h2>' +
-      '<p class="sub">' + (state.pos ? 'Départ : ' + escapeHtml(state.posLabel || 'ma position')
+      '<p class="sub">' + (state.pos ? 'Départ : ' + escapeHtml((state.posLabel || 'ma position').replace(' · position approximative', ' (approx.)'))
         : state.posDenied ? 'Position non autorisée' : 'Recherche de ta position…') + '</p>' +
       '<button class="chipbtn" data-opts="1">' + ICONS.sliders + escapeHtml(prefsLabel()) + '</button>';
 
@@ -762,23 +890,41 @@
     }
 
     if (state.recents.length) {
-      h += '<div class="favs">';
+      h += '<p class="sec-title" style="margin-top:14px">Destinations récentes</p><div class="favs">';
       state.recents.forEach(function (f, i) {
-        h += '<button class="fav" data-fav="' + i + '"><span class="ico">' + ICONS.recent + '</span>' +
-          '<span><span class="t">' + escapeHtml(f.name) + '</span><span class="s">' + escapeHtml(f.sub || '') + '</span></span>' +
-          '<span class="chev">' + ICONS.chev + '</span></button>';
+        var dist = state.pos ? ' · à ' + km(haversine([state.pos.lat, state.pos.lon], [f.lat, f.lon])) : '';
+        h += '<div class="fav"><button class="fav-main" data-fav="' + i + '"><span class="ico">' + ICONS.recent + '</span>' +
+          '<span><span class="t">' + escapeHtml(f.name) + '</span>' +
+          '<span class="s">' + escapeHtml(f.sub || '') + dist + '</span></span></button>' +
+          '<button class="fav-del" data-del="' + i + '" aria-label="Retirer ' + escapeHtml(f.name) + '">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
       });
-      h += '</div>';
+      h += '</div><button class="linkbtn" id="clear-recents">Effacer l’historique</button>';
     } else if (state.pos) {
       h += '<p class="note1">Cherche une adresse dans la barre du haut : elle apparaîtra ensuite ici.</p>';
     }
 
     sheetBody.innerHTML = h;
-    sheet.style.transform = 'translateY(0)';
+    setSheetMode('open', false);
     var lb = document.getElementById('locate-btn');
     if (lb) lb.addEventListener('click', function () { state.posDenied = false; locate(); });
     var pf = document.getElementById('pick-from');
     if (pf) pf.addEventListener('click', startPickFrom);
+    var cr = document.getElementById('clear-recents');
+    if (cr) cr.addEventListener('click', function () {
+      state.recents = [];
+      try { localStorage.removeItem(RECENT_KEY); } catch (e) {}
+      renderHome();
+      toast('Historique effacé');
+    });
+    Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-del]'), function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.recents.splice(Number(b.dataset.del), 1);
+        try { localStorage.setItem(RECENT_KEY, JSON.stringify(state.recents)); } catch (err) {}
+        renderHome();
+      });
+    });
     setSheetHeight();
   }
 
@@ -811,7 +957,7 @@
       var isBest = r === best;
       h += '<button class="rcard' + (i === state.sel ? ' sel' : '') + '" data-route="' + i + '">' +
         '<span><span class="line"><span class="dur' + (isBest ? ' best' : '') + '">' + mins(r.time) + '</span>' +
-        '<span class="meta">' + km(r.length) + '</span></span>' +
+        '<span class="meta">' + km(r.length) + (r.main ? ' · via ' + escapeHtml(r.main) : '') + '</span></span>' +
         '<span class="tag' + (isBest ? ' best' : '') + '">' + escapeHtml(r.label) + '</span></span>' +
         '<span class="eta">arrivée<b>' + clock(base + r.time * 1000) + '</b></span></button>';
     });
@@ -864,10 +1010,48 @@
     }
   }
 
+  /* le conteneur dépasse de l'écran : la zone utile se calcule en pixels écran */
+  function screenRect() {
+    var size = map.getSize();
+    var scr = document.querySelector('.screen');
+    var sw = scr.clientWidth, shh = scr.clientHeight;
+    var ox = (size.x - sw) / 2, oy = (size.y - shh) / 2;
+    var sheetH = (sheetMode === 'hidden') ? 0 : (sheet.getBoundingClientRect().height || 0);
+    var r = {
+      left: ox + 34, right: ox + sw - 76,
+      top: oy + 108, bottom: oy + shh - sheetH - 26
+    };
+    if (r.bottom < r.top + 90) r.bottom = r.top + 90;
+    return r;
+  }
+
   function fitToRoute() {
     if (!routeLayer) return;
     var sh = sheet.getBoundingClientRect().height || 240;
-    map.fitBounds(routeLayer.getBounds(), { paddingTopLeft: [40, 100], paddingBottomRight: [66, sh + 30], animate: false });
+    var size = map.getSize();
+    var scr = document.querySelector('.screen');
+    var ox = Math.max(0, (size.x - scr.clientWidth) / 2);
+    var oy = Math.max(0, (size.y - scr.clientHeight) / 2);
+    /* le conteneur dépasse de l'écran : on compense pour cadrer sur la partie vue */
+    map.fitBounds(routeLayer.getBounds(), {
+      paddingTopLeft: [ox + 34, oy + 104],
+      paddingBottomRight: [ox + 72, oy + sh + 30],
+      maxZoom: 16, animate: false
+    });
+    setTimeout(ensurePinVisible, 220);
+  }
+
+  /* garde-fou : après le calcul de la fiche (hauteur définitive), on recadre
+     si l'épingle d'arrivée est sortie de la zone visible */
+  function ensurePinVisible() {
+    if (!state.dest) return;
+    var r = screenRect();
+    var pin = map.latLngToContainerPoint([state.dest.lat, state.dest.lon]);
+    var cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+    var dx = 0, dy = 0;
+    if (pin.y > r.bottom || pin.y < r.top) dy = pin.y - cy;
+    if (pin.x > r.right || pin.x < r.left) dx = pin.x - cx;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) map.panBy([dx, dy], { animate: false });
   }
 
   function showSuggestions(list, term) {
@@ -906,12 +1090,22 @@
         .catch(function () { sugg.innerHTML = '<div class="empty">Recherche indisponible — vérifie la connexion.</div>'; });
     }, 450);
   });
+  qInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(searchTimer);
+      var term = qInput.value.trim();
+      if (term.length >= 3) searchPlaces(term).then(function (l) { showSuggestions(l, term); }).catch(function () {});
+    }
+  });
+
   document.getElementById('clearq').addEventListener('click', function () {
     qInput.value = ''; searchBox.classList.remove('filled'); hideSuggestions(); qInput.focus();
   });
 
   sheetBody.addEventListener('click', function (e) {
     if (e.target.closest('[data-opts]')) { openOpts(); return; }
+    if (e.target.closest('[data-del]')) return;
     var fav = e.target.closest('[data-fav]');
     if (fav) {
       var f = state.recents[Number(fav.dataset.fav)];
@@ -997,7 +1191,7 @@
     altLayers = [];
     arrowLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
     arrowLayers = [];
-    sheet.style.transform = 'translateY(115%)';
+    setSheetMode('hidden');
     hud.classList.add('on');
     navBar.classList.add('on');
     me.setOpacity(0);
@@ -1009,6 +1203,7 @@
 
   function stopNav() {
     closeOpts();
+    if (typeof closeReportMenu === 'function') closeReportMenu();
     stopWatch();
     state.navigating = false;
     state.playing = false;
@@ -1019,7 +1214,7 @@
     me.setOpacity(1);
     if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
     if (casingLayer) { map.removeLayer(casingLayer); casingLayer = null; }
-    sheet.style.transform = 'translateY(0)';
+    setSheetMode('open');
     if (state.routes.length) { drawRoutes(); renderRoutes(); fitToRoute(); }
     else renderHome();
     setSheetHeight();
@@ -1110,6 +1305,11 @@
     laneEl.textContent = lane;
     if (s) document.getElementById('hud-ico').innerHTML = HUD_ICONS[hudKind(s.type)];
 
+    var after = r.steps[i + 2];
+    document.getElementById('hud-3').textContent = after ? 'puis ' + after.text : '';
+    document.getElementById('hud-prog').style.width =
+      Math.max(0, Math.min(100, (state.traveled / r.length) * 100)).toFixed(1) + '%';
+
     if (i !== state.lastStep) {
       state.lastStep = i;
       if (state.navigating) speak(s ? s.text : '');
@@ -1165,8 +1365,13 @@
     if (state.route && state.navigating) {
       var p = live ? [state.fix.lat, state.fix.lon] : pointAt(state.route.pts, state.route.cum, state.traveled);
       var ref = pointAt(state.route.pts, state.route.cum, Math.min(state.route.length, state.traveled + 15));
-      setCar(p, bearing(p, ref));
+      setCar(p, (bearing(p, ref) + currentBearing() + 360) % 360);
       keepCarInView(p, ts);
+      if (state.capUp) {
+        var hdg = bearing(p, ref);
+        var want = -hdg;
+        if (Math.abs(((want - currentBearing() + 540) % 360) - 180) > 6) setBearing(want);
+      }
       updateGuidance();
       if (live && state.traveled >= state.route.length - 8) { state.playing = false; arrive(); }
     }
@@ -1181,14 +1386,34 @@
     navBar.classList.remove('on');
     closeOpts();
     topEl.classList.remove('hidden');
-    sheet.style.transform = 'translateY(0)';
+    setSheetMode('open');
     speak('Vous êtes arrivé à destination.');
-    sheetBody.innerHTML = '<h2>Vous êtes arrivé</h2><p class="sub">' + escapeHtml(state.dest.name) + ' · ' + km(state.route.length) + '</p>' +
-      '<button class="go" id="done" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12l5 5L19 7"/></svg>Terminer</button>';
+    clearJam();
+    var r = state.route;
+    sheetBody.innerHTML =
+      '<h2>Vous êtes arrivé</h2>' +
+      '<p class="sub">' + escapeHtml(state.dest.name) + '</p>' +
+      '<div class="facts"><span class="big" style="color:var(--go-deep)">' + km(r.length) + '</span>' +
+      '<span class="sep"></span><span class="sm">' + mins(r.time) + (r.main ? ' · via ' + escapeHtml(r.main) : '') + '</span>' +
+      '<span class="tag" style="color:var(--go-deep);background:#e6f8ee"><i></i>Trajet terminé</span></div>' +
+      '<button class="go" id="done" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12l5 5L19 7"/></svg>Retour à l’accueil</button>' +
+      '<button class="ghost" id="again">Refaire ce trajet</button>';
     document.getElementById('done').addEventListener('click', function () {
       if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
+      state.navigating = false;
+      topEl.classList.remove('hidden');
+      me.setOpacity(1);
+      if (state.pos) map.setView([state.pos.lat, state.pos.lon], 15, { animate: false });
       renderHome();
       setSheetHeight();
+    });
+    document.getElementById('again').addEventListener('click', function () {
+      if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
+      state.navigating = false;
+      state.arrived = false;
+      topEl.classList.remove('hidden');
+      me.setOpacity(1);
+      startRoutes(state.dest);
     });
     setSheetHeight();
   }
@@ -1282,8 +1507,46 @@
   }
 
   document.getElementById('stop').addEventListener('click', stopNav);
-  document.getElementById('jam').addEventListener('click', function () { reroute('jam'); });
-  document.getElementById('avoid-here').addEventListener('click', function () { reroute('street'); });
+
+  var reportMenu = document.getElementById('report-menu');
+  var reportBtn = document.getElementById('report-btn');
+  function closeReportMenu() {
+    reportMenu.hidden = true;
+    reportBtn.setAttribute('aria-expanded', 'false');
+  }
+  reportBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = reportMenu.hidden;
+    reportMenu.hidden = !open;
+    reportBtn.setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('#report-menu') && !e.target.closest('#report-btn')) closeReportMenu();
+  });
+  Array.prototype.forEach.call(reportMenu.querySelectorAll('[data-report]'), function (b) {
+    b.addEventListener('click', function () {
+      closeReportMenu();
+      reroute(b.dataset.report);
+    });
+  });
+
+  document.getElementById('compass').addEventListener('click', function () {
+    if (state.navigating) {
+      state.capUp = !state.capUp;
+      if (state.capUp) {
+        var p = pointAt(state.route.pts, state.route.cum, state.traveled);
+        var a = pointAt(state.route.pts, state.route.cum, Math.min(state.route.length, state.traveled + 25));
+        setBearing(-bearing(p, a));
+        toast('Carte orientée vers la route');
+      } else {
+        setBearing(0);
+        toast('Nord en haut');
+      }
+    } else {
+      setBearing(0);
+      toast('Nord en haut');
+    }
+  });
 
   document.getElementById('recenter').addEventListener('click', function () {
     state.following = true;
@@ -1294,9 +1557,7 @@
     else { map.setView(state.pos ? [state.pos.lat, state.pos.lon] : FRANCE, state.pos ? 15 : 5, { animate: false }); }
   });
 
-  document.getElementById('voice').addEventListener('click', function () {
-    setVoice(!state.prefs.voice);
-  });
+  document.getElementById('gear').addEventListener('click', openOpts);
 
   /* ---------- options ---------- */
   var AVOIDS = [
@@ -1306,6 +1567,11 @@
     { key: 'tracks', label: 'Éviter les chemins non goudronnés', hint: 'pistes et chemins' }
   ];
 
+  function avoidRow(a) {
+    return '<div class="row"><span class="lab">' + a.label + '<span class="hint">' + a.hint + '</span></span>' +
+      '<button class="sw" type="button" data-avoid="' + a.key + '" aria-pressed="' +
+      (state.prefs[a.key] ? 'true' : 'false') + '" aria-label="' + a.label + '"></button></div>';
+  }
   function renderAvoids() {
     var wrap = document.getElementById('avoids');
     if (state.prefs.costing !== 'auto') {
@@ -1313,17 +1579,28 @@
       return;
     }
     document.getElementById('avoids-wrap').hidden = false;
-    wrap.innerHTML = AVOIDS.map(function (a) {
-      return '<div class="row"><span class="lab">' + a.label + '<span class="hint">' + a.hint + '</span></span>' +
-        '<button class="sw" type="button" data-avoid="' + a.key + '" aria-pressed="' + (state.prefs[a.key] ? 'true' : 'false') + '" aria-label="' + a.label + '"></button></div>';
-    }).join('');
+
+    /* deux réglages courants, les deux autres derrière « Plus d'options » */
+    var extrasOn = state.prefs.ferry || state.prefs.tracks;
+    var open = state.moreOpen || extrasOn;
+    wrap.innerHTML = AVOIDS.slice(0, 2).map(avoidRow).join('') +
+      '<div class="more-avoids" id="more-avoids"' + (open ? '' : ' hidden') + '>' +
+      AVOIDS.slice(2).map(avoidRow).join('') + '</div>' +
+      '<button class="linkbtn" id="more-btn" type="button">' +
+      (open ? 'Moins d’options' : 'Plus d’options') + '</button>';
+
     Array.prototype.forEach.call(wrap.querySelectorAll('[data-avoid]'), function (b) {
       b.addEventListener('click', function () {
         var k = b.dataset.avoid;
         state.prefs[k] = !state.prefs[k];
         b.setAttribute('aria-pressed', String(state.prefs[k]));
+        savePrefs();
         recompute();
       });
+    });
+    document.getElementById('more-btn').addEventListener('click', function () {
+      state.moreOpen = !open;
+      renderAvoids();
     });
   }
 
@@ -1331,10 +1608,10 @@
     if (on && !VOICE_OK) { toast('Pas de synthèse vocale dans ce navigateur'); return; }
     state.prefs.voice = on;
     document.getElementById('sw-voice').setAttribute('aria-pressed', String(on));
-    var fab = document.getElementById('voice');
-    fab.classList.toggle('off', !on);
-    fab.setAttribute('aria-pressed', String(on));
+    var sw = document.getElementById('sw-voice');
+    if (sw) sw.setAttribute('aria-pressed', String(on));
     if (!on && VOICE_OK) window.speechSynthesis.cancel();
+    savePrefs();
   }
 
   function openOpts() {
@@ -1364,6 +1641,8 @@
 
   document.getElementById('ovl-x').addEventListener('click', closeOpts);
   ovl.addEventListener('click', function (e) { if (e.target === ovl) closeOpts(); });
+  document.addEventListener('visibilitychange', function () { lastTs = 0; });
+
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       closeOpts(); hideSuggestions(); hideBanner();
@@ -1381,6 +1660,7 @@
       Array.prototype.forEach.call(document.querySelectorAll('#seg-costing button'), function (x) {
         x.setAttribute('aria-pressed', String(x === b));
       });
+      savePrefs();
       renderAvoids();
       recompute();
     });
@@ -1411,17 +1691,64 @@
     toast('Départ immédiat');
   });
 
-  document.getElementById('opts-fab').addEventListener('click', openOpts);
-  document.getElementById('opts-fab').addEventListener('click', openOpts);
 
-  document.getElementById('grip').addEventListener('click', function () {
-    if (state.phase !== 'routes') return;
-    sheet.classList.toggle('compact');
-    this.setAttribute('aria-label', sheet.classList.contains('compact') ? 'Agrandir la fiche' : 'Réduire la fiche');
-    setSheetHeight();
+
+  document.getElementById('reset-opts').addEventListener('click', function () {
+    state.prefs.costing = 'auto';
+    state.prefs.tolls = state.prefs.highways = state.prefs.ferry = state.prefs.tracks = false;
+    setVoice(true);
+    savePrefs();
+    Array.prototype.forEach.call(document.querySelectorAll('#seg-costing button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.costing === 'auto'));
+    });
+    renderAvoids();
+    recompute();
+    toast('Préférences réinitialisées');
   });
 
+  /* poignée : glisser pour ouvrir/fermer, taper pour basculer */
+  (function () {
+    var grip = document.getElementById('grip');
+    var drag = null;
+
+    grip.addEventListener('pointerdown', function (e) {
+      if (sheetMode === 'hidden') return;
+      drag = { y: e.clientY, from: shownFor(sheetMode), moved: false };
+      sheet.classList.add('dragging');
+      try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+
+    grip.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var dy = drag.y - e.clientY;
+      if (Math.abs(dy) > 5) drag.moved = true;
+      applySheet(drag.from + dy, false);
+    });
+
+    function end(e) {
+      if (!drag) return;
+      var dy = drag.y - e.clientY;
+      sheet.classList.remove('dragging');
+      var h = sheetH();
+      if (!drag.moved) {
+        setSheetMode(sheetMode === 'open' ? 'closed' : 'open');
+      } else {
+        var cur = drag.from + dy;
+        var targets = [54, Math.min(152, h), h];
+        var best = targets.reduce(function (a, b) {
+          return Math.abs(b - cur) < Math.abs(a - cur) ? b : a;
+        });
+        setSheetMode(best >= h - 1 ? 'open' : best > 60 ? 'peek' : 'closed');
+      }
+      grip.setAttribute('aria-label', sheetMode === 'open' ? 'Réduire la fiche' : 'Agrandir la fiche');
+      drag = null;
+    }
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', function () { drag = null; sheet.classList.remove('dragging'); });
+  })();
+
   map.on('dragstart', function () { state.following = false; });
+  map.on('click', function () { hideSuggestions(); });
 
   function fitPhone() {
     var phone = document.querySelector('.phone');
@@ -1433,17 +1760,13 @@
   fitPhone();
   window.addEventListener('resize', fitPhone);
 
-  /* le bouton vocal reflète l'état au démarrage */
-  (function () {
-    var fab = document.getElementById('voice');
-    fab.classList.toggle('off', !state.prefs.voice);
-    fab.setAttribute('aria-pressed', String(state.prefs.voice));
-  })();
-
   state.recents = loadRecents();
+  loadPrefs();
+  document.getElementById('sw-voice').setAttribute('aria-pressed', String(state.prefs.voice));
   renderHome();
   locate();
-  setTimeout(function () { map.invalidateSize(); setSheetHeight(); }, 200);
+  sizeMap();
+  setTimeout(function () { sizeMap(); setSheetHeight(); }, 200);
 })();
 </script>
 </body>
