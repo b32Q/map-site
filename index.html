@@ -439,9 +439,11 @@
   var map = L.map('map', {
     center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
     zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
-    /* dessin vectoriel : le navigateur déplace le tracé avec la carte, sans le recalculer
-       à chaque image — c'est ce qui évite le retard (le tracé « qui tremble ») sur mobile */
-    preferCanvas: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false,
+    /* Animation de zoom de Leaflet laissée active : pendant le zoom, tuiles et tracé sont
+       agrandis par la même transformation CSS, donc le tracé ne peut pas se désolidariser
+       des routes. C'est la reprojection image par image (animation coupée) qui faisait
+       « trembler » le trait. */
+    preferCanvas: false, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
     rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
   });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
@@ -470,13 +472,14 @@
     if (casingLayer) casingLayer.redraw();
     altLayers.forEach(function (l) { if (l.redraw) l.redraw(); });
   }
+  /* Le tracé est reprojeté par Leaflet lui-même à chaque image de zoom
+     (`L.Renderer._update`). Nos redessins supplémentaires réécrivaient le même
+     chemin plusieurs fois par image, avec des états intermédiaires différents :
+     c'est ce qui faisait « trembler » le trait. On ne garde donc qu'un seul
+     redessin, celui que Leaflet ne fait pas : le changement d'angle. */
   function redrawSoon() {
-    requestAnimationFrame(redrawRoute);   /* au plus un redessin par image */
+    requestAnimationFrame(redrawRoute);
   }
-  map.on('zoom', redrawSoon);
-  map.on('zoomend', redrawRoute);
-  map.on('moveend', redrawRoute);
-  map.on('viewreset', redrawRoute);
   map.on('rotateend', redrawRoute);
 
   map.on('rotate', updateNeedle);
