@@ -51,7 +51,7 @@
     .notch,.phone::after{display:none}
   }
 
-  #map{position:absolute;left:0;top:0;background:#e9e6df;font-family:inherit;z-index:0}
+  #map{position:absolute;inset:0;background:#e9e6df;font-family:inherit;z-index:0}
   .leaflet-container{background:#e9e6df;font-family:inherit}
   .leaflet-tile-pane{filter:saturate(1.06) brightness(1.02) contrast(1.05)}
   .leaflet-bottom.leaflet-left{bottom:calc(var(--credit,240px) + 2px);transition:bottom .3s cubic-bezier(.22,.68,.24,1)}
@@ -665,17 +665,16 @@
     });
   }
 
-  /* le conteneur est plus grand que l'écran : en rotation, les coins restent couverts */
-  var mapEl = document.getElementById('map');
-  function sizeMap() {
+  /* la carte occupe exactement l'écran : aucun décalage possible entre les calques */
+  var lastW = 0, lastH = 0, gestureUntil = 0;
+  function sizeMap(force) {
     var scr = document.querySelector('.screen');
-    var side = Math.ceil((scr.clientWidth + scr.clientHeight) / 1.42);
-    mapEl.style.width = side + 'px';
-    mapEl.style.height = side + 'px';
-    /* pixels entiers, sans transform : sinon le calque des tracés se décale
-       d'un demi-pixel (visible sur mobile pendant le zoom) */
-    mapEl.style.left = Math.round((scr.clientWidth - side) / 2) + 'px';
-    mapEl.style.top = Math.round((scr.clientHeight - side) / 2) + 'px';
+    var w = scr.clientWidth, h = scr.clientHeight;
+    /* Chrome sur telephone declenche « resize » quand la barre d'adresse se replie :
+       sans ce filtre, la carte se recadre en plein geste et le tracé paraît bouger */
+    if (!force && (w === lastW && h === lastH)) return;
+    if (!force && Date.now() < gestureUntil) return;
+    lastW = w; lastH = h;
     if (map.invalidateSize) map.invalidateSize({ pan: false });
   }
 
@@ -752,7 +751,17 @@
     applySheet(shownFor(sheetMode), false);
     if (state.phase === 'routes') setTimeout(ensurePinVisible, 60);
   }
-  window.addEventListener('resize', function () { sizeMap(); setSheetHeight(); });
+  window.addEventListener('resize', function () {
+    if (Date.now() < gestureUntil) return;
+    sizeMap();
+    setTimeout(function () { if (Date.now() >= gestureUntil) setSheetHeight(); }, 150);
+  });
+  ['movestart', 'zoomstart', 'rotatestart', 'dragstart'].forEach(function (ev) {
+    map.on(ev, function () { gestureUntil = Date.now() + 500; });
+  });
+  ['moveend', 'zoomend', 'rotateend', 'dragend'].forEach(function (ev) {
+    map.on(ev, function () { setTimeout(function () { gestureUntil = 0; }, 220); });
+  });
 
   var ICONS = {
     home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>',
@@ -1082,14 +1091,8 @@
   /* le conteneur dépasse de l'écran : la zone utile se calcule en pixels écran */
   function screenRect() {
     var size = map.getSize();
-    var scr = document.querySelector('.screen');
-    var sw = scr.clientWidth, shh = scr.clientHeight;
-    var ox = (size.x - sw) / 2, oy = (size.y - shh) / 2;
     var sheetH = (sheetMode === 'hidden') ? 0 : (sheet.getBoundingClientRect().height || 0);
-    var r = {
-      left: ox + 34, right: ox + sw - 76,
-      top: oy + 108, bottom: oy + shh - sheetH - 26
-    };
+    var r = { left: 34, right: size.x - 76, top: 108, bottom: size.y - sheetH - 26 };
     if (r.bottom < r.top + 90) r.bottom = r.top + 90;
     return r;
   }
@@ -1097,14 +1100,8 @@
   function fitToRoute() {
     if (!routeLayer) return;
     var sh = sheet.getBoundingClientRect().height || 240;
-    var size = map.getSize();
-    var scr = document.querySelector('.screen');
-    var ox = Math.max(0, (size.x - scr.clientWidth) / 2);
-    var oy = Math.max(0, (size.y - scr.clientHeight) / 2);
-    /* le conteneur dépasse de l'écran : on compense pour cadrer sur la partie vue */
     map.fitBounds(routeLayer.getBounds(), {
-      paddingTopLeft: [ox + 34, oy + 104],
-      paddingBottomRight: [ox + 72, oy + sh + 30],
+      paddingTopLeft: [34, 104], paddingBottomRight: [72, sh + 30],
       maxZoom: 16, animate: false
     });
     setTimeout(ensurePinVisible, 220);
@@ -1114,6 +1111,7 @@
      si l'épingle d'arrivée est sortie de la zone visible */
   function ensurePinVisible() {
     if (!state.dest) return;
+    if (Date.now() < gestureUntil) return;   /* jamais pendant un geste */
     var r = screenRect();
     var pin = map.latLngToContainerPoint([state.dest.lat, state.dest.lon]);
     var cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
@@ -1418,7 +1416,7 @@
     map.panTo(p, { animate: true, duration: 0.55, easeLinearity: 0.35 });
   }
 
-  var lastTs = 0;
+  var lastTs = 0, lastBearing = 0;
   function loop(ts) {
     var live = state.gpsLive && state.fix && (Date.now() - state.fix.ts < 8000);
 
@@ -1430,6 +1428,13 @@
       if (state.traveled >= state.route.length) { state.playing = false; arrive(); }
     }
     lastTs = ts;
+
+    /* la rotation ne redessine pas le calque du tracé : on surveille l'angle */
+    var brg = currentBearing();
+    if (Math.abs(brg - lastBearing) > 0.4) {
+      lastBearing = brg;
+      redrawSoon();
+    }
 
     if (state.route && state.navigating) {
       var p = live ? [state.fix.lat, state.fix.lon] : pointAt(state.route.pts, state.route.cum, state.traveled);
@@ -1834,8 +1839,8 @@
   document.getElementById('sw-voice').setAttribute('aria-pressed', String(state.prefs.voice));
   renderHome();
   locate();
-  sizeMap();
-  setTimeout(function () { sizeMap(); setSheetHeight(); }, 200);
+  sizeMap(true);
+  setTimeout(function () { sizeMap(true); setSheetHeight(); }, 200);
 })();
 </script>
 </body>
