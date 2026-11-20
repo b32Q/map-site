@@ -6,6 +6,8 @@
 <title>Navigation</title>
 <meta name="theme-color" content="#0d0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-touch-fullscreen" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%232f6bff'/><path d='M16 7l6 15-6-3.5-6 3.5z' fill='%23fff'/></svg>">
 <meta name="description" content="Maquette : recherche d'adresse, itinéraires comparés, véhicule, péages, voie à prendre, guidage vocal, départ planifié.">
@@ -27,6 +29,8 @@
     display:grid;place-items:center;overflow:hidden;
   }
   button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+  body,.screen{-webkit-user-select:none;user-select:none}
+  .sheet-body,.hud,.sugg{-webkit-overflow-scrolling:touch}
   input{font:inherit;color:inherit;border:0;background:none;outline:none}
   :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
@@ -73,7 +77,8 @@
   .rarrow svg{width:13px;height:13px;display:block}
   .jam{width:30px;height:30px;border-radius:50%;background:var(--danger);border:2.5px solid #fff;display:grid;place-items:center;box-shadow:0 5px 12px -4px rgba(11,18,32,.5)}
 
-  .top{position:absolute;top:18px;left:14px;right:14px;z-index:900;transition:opacity .25s ease,transform .25s ease}
+  .top{position:absolute;top:calc(18px + env(safe-area-inset-top));left:14px;right:14px;z-index:900;
+    transition:opacity .25s ease,transform .25s ease}
   .top.hidden{opacity:0;transform:translateY(-16px);pointer-events:none}
   .search{display:flex;align-items:center;gap:10px;height:52px;padding:0 6px 0 15px;background:#fff;border-radius:15px;
     box-shadow:0 12px 30px -12px rgba(11,18,32,.42),0 0 0 1px rgba(16,24,40,.05)}
@@ -434,7 +439,7 @@
   var map = L.map('map', {
     center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
     zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
-    preferCanvas: true, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
+    preferCanvas: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false,
     rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
   });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
@@ -594,19 +599,51 @@
   }
 
   var searchTimer = null, searchSeq = 0;
+
+  function norm(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  }
+  var CITY_TYPES = ['city', 'town', 'village', 'municipality', 'administrative', 'state', 'county', 'region'];
+
+  /* le classement de Nominatim privilégie la proximité : « lyon » sortait
+     « Gare de Lyon » à Paris. On remonte les villes et les noms exacts. */
+  function rankPlaces(list, term) {
+    var q = norm(term);
+    return list.map(function (p) {
+      var parts = (p.display_name || '').split(',');
+      var name = (p.name || parts[0] || '').trim();
+      var n = norm(name);
+      var score = 0;
+      if (n === q) score += 100;
+      else if (n.indexOf(q) === 0) score += 60;
+      else if (n.indexOf(q) > -1) score += 35;
+      if (CITY_TYPES.indexOf(p.type) > -1) score += 55;
+      if (p.class === 'place' || p.class === 'boundary') score += 20;
+      if (p.type === 'house' || p.type === 'railway' || p.class === 'railway') score += 5;
+      if (state.pos) {
+        var d = haversine([state.pos.lat, state.pos.lon], [parseFloat(p.lat), parseFloat(p.lon)]);
+        score += Math.max(0, 40 - Math.min(40, d / 1000));
+      }
+      return {
+        name: name,
+        sub: parts.slice(1, 3).join(',').trim(),
+        lat: parseFloat(p.lat),
+        lon: parseFloat(p.lon),
+        score: score
+      };
+    }).sort(function (a, b) { return b.score - a.score; }).slice(0, 6);
+  }
+
   function searchPlaces(term) {
     var seq = ++searchSeq;
     var vb = state.pos
       ? [state.pos.lon - .4, state.pos.lat - .3, state.pos.lon + .4, state.pos.lat + .3].join(',')
       : '5.60,43.00,6.30,43.35';
-    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&accept-language=fr' +
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1&accept-language=fr' +
       '&viewbox=' + vb + '&bounded=0&q=' + encodeURIComponent(term);
     return fetch(url).then(function (r) { return r.json(); }).then(function (list) {
       if (seq !== searchSeq) return null;
-      return list.map(function (p) {
-        var parts = (p.display_name || '').split(',');
-        return { name: parts[0].trim(), sub: parts.slice(1, 3).join(',').trim(), lat: parseFloat(p.lat), lon: parseFloat(p.lon) };
-      });
+      return rankPlaces(list || [], term);
     });
   }
 
