@@ -51,7 +51,7 @@
     .notch,.phone::after{display:none}
   }
 
-  #map{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#e9e6df;font-family:inherit;z-index:0}
+  #map{position:absolute;left:0;top:0;background:#e9e6df;font-family:inherit;z-index:0}
   .leaflet-container{background:#e9e6df;font-family:inherit}
   .leaflet-tile-pane{filter:saturate(1.06) brightness(1.02) contrast(1.05)}
   .leaflet-bottom.leaflet-left{bottom:calc(var(--credit,240px) + 2px);transition:bottom .3s cubic-bezier(.22,.68,.24,1)}
@@ -463,6 +463,24 @@
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
   }
   useTiles(0);
+  function redrawRoute() {
+    if (routeLayer) routeLayer.redraw();
+    if (casingLayer) casingLayer.redraw();
+    altLayers.forEach(function (l) { if (l.redraw) l.redraw(); });
+  }
+  var lastRedraw = 0;
+  function redrawSoon() {
+    var now = Date.now();
+    if (now - lastRedraw < 90) return;   /* pas de redessin à chaque image */
+    lastRedraw = now;
+    requestAnimationFrame(redrawRoute);
+  }
+  map.on('zoom', redrawSoon);
+  map.on('zoomend', redrawRoute);
+  map.on('moveend', redrawRoute);
+  map.on('viewreset', redrawRoute);
+  map.on('rotateend', redrawRoute);
+
   map.on('rotate', updateNeedle);
   map.on('rotateend', updateNeedle);
 
@@ -654,6 +672,10 @@
     var side = Math.ceil((scr.clientWidth + scr.clientHeight) / 1.42);
     mapEl.style.width = side + 'px';
     mapEl.style.height = side + 'px';
+    /* pixels entiers, sans transform : sinon le calque des tracés se décale
+       d'un demi-pixel (visible sur mobile pendant le zoom) */
+    mapEl.style.left = Math.round((scr.clientWidth - side) / 2) + 'px';
+    mapEl.style.top = Math.round((scr.clientHeight - side) / 2) + 'px';
     if (map.invalidateSize) map.invalidateSize({ pan: false });
   }
 
