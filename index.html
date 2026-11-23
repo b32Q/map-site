@@ -507,6 +507,30 @@
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
   }
   useTiles(0);
+
+  /* ---------------------------------------------------------------------
+     Correctif « routes qui tremblent sous le tracé ».
+
+     Leaflet positionne chaque niveau de tuiles avec une translation ARRONDIE
+     à l'entier (`_setZoomTransform`), alors que le tracé est calculé au pixel
+     exact. Pendant un pincement le zoom est fractionnaire et change en
+     continu : l'arrondi bascule sans arrêt entre -0,5 et +0,5 px (mesuré), donc
+     l'image des routes saute d'un demi-pixel à chaque cran pendant que le
+     tracé reste fixe — d'où l'impression que le trait se décale, puis « revient »
+     quand le zoom se stabilise.
+     On garde la position fractionnaire : les tuiles suivent alors exactement la
+     même projection que le tracé.
+     --------------------------------------------------------------------- */
+  (function patchTileTransform() {
+    var setT = L.DomUtil.setTransform;
+    L.TileLayer.prototype._setZoomTransform = function (level, center, zoom) {
+      var scale = this._map.getZoomScale(zoom, level.zoom);
+      var translate = level.origin.multiplyBy(scale)
+        .subtract(this._map._getNewPixelOrigin(center, zoom));   /* pas de .round() */
+      if (L.Browser.any3d) setT(level.el, translate, scale);
+      else L.DomUtil.setPosition(level.el, translate);
+    };
+  })();
   /* ---------- fenêtre Google Maps (iframe, sans clé) ---------- */
   var gbtn = document.getElementById('gbtn'), gwrap = document.getElementById('gwrap'),
       gframe = document.getElementById('gframe'), glink = document.getElementById('glink');
@@ -552,119 +576,114 @@
 
   var destMarker = null, carMarker = null, jamMarker = null;
   var jamLayer = null, jamCasing = null;
-  /* ======================================================================
-     TRACÉ DE L'ITINÉRAIRE — réécrit de zéro.
+  /* ---------- tracé de l'itinéraire ---------- */
+  var altLayers = [], routeLayer = null, casingLayer = null, arrowLayers = [], jamLayer = null, jamCasing = null;
+  /* Moteur de rendu propre au tracé, SANS marge interne (padding: 0) : le tracé et les
+     tuiles utilisent alors exactement le même point de référence, y compris pendant un
+     pincement où la carte change de zoom en continu. */
+  var routeRenderer = L.canvas({ padding: 0, tolerance: 0.4 });
 
-     Un seul moteur de rendu (canvas sans marge interne : même point de
-     référence que les tuiles), deux traits pour l'itinéraire choisi (liseré
-     blanc + ligne bleue) et un trait gris par variante. Aucun redessin
-     manuel : c'est Leaflet qui reprojette à chaque zoom, et le canvas n'est
-     que déplacé pendant les gestes. Rien d'autre ne touche à ces couches.
-     ====================================================================== */
-  var routeView = (function () {
-    var renderer = L.canvas({ padding: 0, tolerance: 0.4 });
-    var casing = null, line = null, alts = [];
-    var routes = [], sel = 0;
+  /* épaisseur du trait adaptée au zoom : fine de loin, franche de près */
+  function routeWeight(z) {
+    if (z >= 16) return 7;
+    if (z >= 14) return 6.5;
+    if (z >= 12) return 5.5;
+    if (z >= 10) return 4.5;
+    return 4;
+  }
+  function applyRouteWeight() {
+    if (!routeLayer) return;
+    var w = routeWeight(map.getZoom());
+    routeLayer.setStyle({ weight: w });
+    if (casingLayer) casingLayer.setStyle({ weight: w + 3 });
+    altLayers.forEach(function (l) { l.setStyle({ weight: Math.max(3, w - 2) }); });
+  }
+  map.on('zoomend', applyRouteWeight);
 
-    function width(z) {
-      if (z >= 16) return 7;
-      if (z >= 14) return 6.5;
-      if (z >= 12) return 5.5;
-      if (z >= 10) return 4.5;
-      return 4;
-    }
-    function style(w, color, extra) {
-      var o = {
-        renderer: renderer, color: color, weight: w, opacity: 1,
-        lineCap: 'round', lineJoin: 'round', smoothFactor: 0.3, interactive: false
-      };
-      for (var k in extra) o[k] = extra[k];
-      return o;
-    }
-    function clearAll() {
-      [casing, line].concat(alts).forEach(function (l) { if (l && map.hasLayer(l)) map.removeLayer(l); });
-      casing = line = null; alts = [];
-    }
-    function draw() {
-      clearAll();
-      if (!routes.length) return;
-      var w = width(map.getZoom()), i;
-      for (i = 0; i < routes.length; i++) {
-        if (i === sel) continue;
-        alts.push(L.polyline(routes[i].pts, style(Math.max(3, w - 2), '#98a2b3', { opacity: .85 })).addTo(map));
-      }
-      var g = routes[sel].pts;
-      casing = L.polyline(g, style(w + 3, '#ffffff')).addTo(map);
-      line = L.polyline(g, style(w, '#2f6bff')).addTo(map);
-    }
-
-    return {
-      show: function (list, index) {
-        routes = list || []; sel = index || 0; draw();
-      },
-      select: function (index) { sel = index; draw(); },
-      /* guidage : on ne garde que l'itinéraire choisi */
-      navMode: function () {
-        alts.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
-        alts = [];
-      },
-      /* guidage : n'afficher que la partie restante */
-      trim: function (pts) {
-        if (!line || !casing || !pts || !pts.length) return;
-        line.setLatLngs(pts); casing.setLatLngs(pts);
-      },
-      restore: function () {
-        if (!routes.length || !line) return;
-        var g = routes[sel].pts;
-        line.setLatLngs(g); casing.setLatLngs(g);
-      },
-      /* déviation recalculée : nouvelle géométrie pour l'itinéraire choisi */
-      geometry: function (pts) {
-        if (!routes.length) return;
-        routes[sel].pts = pts;
-        if (line) { line.setLatLngs(pts); casing.setLatLngs(pts); }
-      },
-      width: function () {
-        if (!line) return;
-        var w = width(map.getZoom());
-        line.setStyle({ weight: w });
-        if (casing) casing.setStyle({ weight: w + 3 });
-        alts.forEach(function (a) { a.setStyle({ weight: Math.max(3, w - 2) }); });
-      },
-      bounds: function () { return line ? line.getBounds() : null; },
-      hide: function () { clearAll(); routes = []; },
-      redraw: function () { draw(); },
-      /* reprojection du seul moteur de rendu, sans reconstruire les couches */
-      redrawZoom: function () { if (renderer && renderer._map) renderer._update(); },
-      exists: function () { return !!line; }
-    };
-  })();
-  /* Pendant un pincement, la carte change de zoom en continu : le canvas ne fait que
-     déplacer son image, le tracé resterait dessiné pour l'ancien zoom. On le reprojette
-     donc à chaque cran de zoom pendant le geste (au plus 11 fois par seconde), jamais
-     pendant un simple déplacement. */
-  (function () {
-    var pending = false, lastZ = null, lastAt = 0;
-    function pass() {
-      if (pending) return;
-      pending = true;
-      requestAnimationFrame(function () {
-        pending = false;
-        if (routeView.exists()) routeView.redrawZoom();
-        lastZ = map.getZoom();
-        lastAt = Date.now();
-      });
-    }
-    map.on('zoom', function () {
-      if (!inGesture()) return;
-      var z = map.getZoom();
-      if (lastZ !== null && Math.abs(z - lastZ) < 0.02) return;
-      if (Date.now() - lastAt < 90) return;
-      pass();
+  function drawRoutes() {
+    altLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
+    altLayers = [];
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    if (casingLayer) { map.removeLayer(casingLayer); casingLayer = null; }
+    if (!state.routes.length) { updateGoogleBtn(); return; }
+    state.routes.forEach(function (r, i) {
+      if (i === state.sel) return;
+      altLayers.push(L.polyline(r.pts, {
+        color: '#98a2b3', weight: Math.max(3, routeWeight(map.getZoom()) - 2), opacity: .85,
+        lineCap: 'round', lineJoin: 'round', smoothFactor: 0.3, interactive: false,
+        renderer: routeRenderer
+      }).addTo(map));
     });
-    map.on('zoomend', function () { lastZ = null; routeView.width(); pass(); });
-    map.on('rotateend', function () { routeView.redraw(); });   /* la rotation ne reprojette pas */
-  })();
+    var sel = state.routes[state.sel];
+    var w = routeWeight(map.getZoom());
+    casingLayer = L.polyline(sel.pts, {
+      color: '#ffffff', weight: w + 3, opacity: 1, lineCap: 'round', lineJoin: 'round',
+      smoothFactor: 0.3, interactive: false, renderer: routeRenderer
+    }).addTo(map);
+    routeLayer = L.polyline(sel.pts, {
+      color: '#2f6bff', weight: w, opacity: 1, lineCap: 'round', lineJoin: 'round',
+      smoothFactor: 0.3, interactive: false, renderer: routeRenderer
+    }).addTo(map);
+    drawArrows(sel);
+    updateGoogleBtn();
+  }
+
+  function drawArrows(route) {
+    arrowLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
+    arrowLayers = [];
+    if (!route) return;
+    var step = Math.max(420, route.length / 22);
+    for (var d = step; d < route.length - 120; d += step) {
+      var a = pointAt(route.pts, route.cum, d);
+      var b = pointAt(route.pts, route.cum, Math.min(route.length, d + 14));
+      var deg = Math.round(bearing(a, b) - 90);
+      arrowLayers.push(L.marker(a, {
+        icon: L.divIcon({
+          className: '', iconSize: [17, 17], iconAnchor: [8, 8],
+          html: '<div class="rarrow" style="transform:rotate(' + deg + 'deg)"><svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>'
+        }),
+        interactive: false, keyboard: false, zIndexOffset: 320
+      }).addTo(map));
+    }
+  }
+
+  function redrawRoute() {
+    if (routeLayer) routeLayer.redraw();
+    if (casingLayer) casingLayer.redraw();
+    altLayers.forEach(function (l) { if (l.redraw) l.redraw(); });
+  }
+  function redrawSoon() {
+    requestAnimationFrame(redrawRoute);
+  }
+  map.on('rotateend', redrawRoute);
+
+  /* reprojection pendant un pincement : la carte change de zoom en continu, le canvas
+     ne fait que déplacer son image. On reprojette à chaque cran, au plus 11 fois/s. */
+  var routeRedrawPending = false, lastZoomDrawn = null, lastRedrawAt = 0;
+  function scheduleRouteRedraw() {
+    if (routeRedrawPending) return;
+    routeRedrawPending = true;
+    requestAnimationFrame(function () {
+      routeRedrawPending = false;
+      if (!routeRenderer || !routeRenderer._map) return;
+      routeRenderer._update();
+      lastZoomDrawn = map.getZoom();
+      lastRedrawAt = Date.now();
+    });
+  }
+  map.on('zoom', function () {
+    if (!inGesture()) return;
+    var z = map.getZoom();
+    if (lastZoomDrawn !== null && Math.abs(z - lastZoomDrawn) < 0.02) return;
+    if (Date.now() - lastRedrawAt < 90) return;
+    scheduleRouteRedraw();
+  });
+  function endGestureRedraw() {
+    lastZoomDrawn = null;
+    scheduleRouteRedraw();
+  }
+  map.on('zoomend', function () { applyRouteWeight(); endGestureRedraw(); });
+  map.on('moveend', function () { if (!inGesture()) endGestureRedraw(); });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -1260,8 +1279,8 @@
   }
 
   function fitToRoute() {
-    var b = routeView.bounds();
-    if (!b) return;
+    if (!routeLayer) return;
+    var b = routeLayer.getBounds();
     var sh = sheet.getBoundingClientRect().height || 240;
     map.fitBounds(b, {
       paddingTopLeft: [34, 104], paddingBottomRight: [72, sh + 30],
@@ -1391,7 +1410,7 @@
       }
       state.routes = keep;
       state.sel = 0;
-      routeView.show(state.routes, state.sel);
+      drawRoutes();
       renderRoutes();
       fitToRoute();   /* après le rendu : la fiche a sa hauteur définitive */
     });
@@ -1399,7 +1418,7 @@
 
   function selectRoute(i) {
     state.sel = i;
-    routeView.select(i);
+    drawRoutes();
     renderRoutes();
   }
 
@@ -1417,7 +1436,10 @@
     state.ri = 0;
     hideBanner();
     if (!(state.pos && state.pos.manual)) startWatch();
-    routeView.navMode();          /* on ne garde que l'itinéraire choisi */
+    altLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
+    altLayers = [];
+    arrowLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
+    arrowLayers = [];
     setSheetMode('hidden');
     hud.classList.add('on');
     navBar.classList.add('on');
@@ -1440,10 +1462,11 @@
     navBar.classList.remove('on');
     topEl.classList.remove('hidden');
     me.setOpacity(1);
-    routeView.hide();
+    if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+    if (casingLayer) { map.removeLayer(casingLayer); casingLayer = null; }
     setSheetMode('open');
     updateGoogleBtn();
-    if (state.routes.length) { routeView.show(state.routes, state.sel); renderRoutes(); fitToRoute(); }
+    if (state.routes.length) { drawRoutes(); renderRoutes(); fitToRoute(); }
     else renderHome();
     setSheetHeight();
     hideBanner();
@@ -1587,7 +1610,7 @@
     map.panTo(p, { animate: true, duration: 0.55, easeLinearity: 0.35 });
   }
 
-  var lastTs = 0;
+  var lastTs = 0, lastBearing = 0;
   function loop(ts) {
     var live = state.gpsLive && state.fix && (Date.now() - state.fix.ts < 8000);
 
@@ -1612,7 +1635,9 @@
           Math.abs(state.traveled - lastTrimAt) > 6) {
         lastTrim = Date.now();
         lastTrimAt = state.traveled;
-        routeView.trim(trimRoute(state.route, state.traveled));
+        var rest = trimRoute(state.route, state.traveled);
+        if (routeLayer) routeLayer.setLatLngs(rest);
+        if (casingLayer) casingLayer.setLatLngs(rest);
       }
       var ref = pointAt(state.route.pts, state.route.cum, Math.min(state.route.length, state.traveled + 15));
       setCar(p, (bearing(p, ref) + currentBearing() + 360) % 360);
@@ -1698,7 +1723,10 @@
         state.traveled = 0;
         state.ri = 0;
         state.lastStep = -1;
-        routeView.geometry(nr.pts);
+        if (routeLayer) map.removeLayer(routeLayer);
+        if (casingLayer) map.removeLayer(casingLayer);
+        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round', renderer: routeRenderer }).addTo(map);
+        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round', renderer: routeRenderer }).addTo(map);
         state.following = true;
         state.offCount = 0;
         banner('Nouvel itinéraire calculé. Arrivée à ' + clock(Date.now() + nr.time * 1000) + '.', 7000);
@@ -1740,7 +1768,10 @@
         state.route = nr;
         state.traveled = 0;
         state.lastStep = -1;
-        routeView.geometry(nr.pts);
+        if (routeLayer) map.removeLayer(routeLayer);
+        if (casingLayer) map.removeLayer(casingLayer);
+        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round', renderer: routeRenderer }).addTo(map);
+        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round', renderer: routeRenderer }).addTo(map);
         state.following = true;
         map.setView(from, 16, { animate: false });
         banner((kind === 'street' ? 'Nouvel itinéraire' : 'Bouchon évité') + ' : ' +
