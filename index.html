@@ -309,7 +309,7 @@
   .menubtn svg{width:22px;height:22px}
   .menubtn .dot{position:absolute;right:12px;top:12px;width:7px;height:7px;border-radius:50%;
     background:#f97066;box-shadow:0 0 0 2px #fff}
-  .vehpill{position:absolute;left:14px;bottom:calc(var(--sheet-h,220px) + 12px);z-index:885;
+  .vehpill{position:absolute;right:14px;bottom:calc(var(--sheet-h,220px) + 12px);z-index:885;
     display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 13px;
     border-radius:22px;background:var(--blue);color:#fff;font-size:14.5px;font-weight:600;
     letter-spacing:-.01em;box-shadow:0 14px 28px -14px rgba(47,107,255,.85);
@@ -317,7 +317,7 @@
   .vehpill:active{transform:scale(.97)}
   .vehpill svg{width:17px;height:17px;flex:none}
   .vehpill .chev{opacity:.8;width:15px;height:15px;margin-left:-2px}
-  .fab-col{left:14px;right:auto;bottom:calc(var(--sheet-h,220px) + 66px)}
+  .fab-col{right:14px;left:auto;bottom:calc(var(--sheet-h,220px) + 66px)}
   .sheet .search{height:50px;margin:0 0 8px;background:#f1f3f7;box-shadow:none;border-radius:14px;
     padding:0 6px 0 14px}
   .sheet .search .x{background:#e6e9ee}
@@ -1250,10 +1250,14 @@ var L = (function () {
          `origin` conserve l'indice d'origine de chaque point gardé, pour retrouver la
          position des consignes de guidage après l'allègement. */
       var origin = null;
-      if (pts.length > 4000) {
+      /* Depuis le passage au rendu vectoriel, la carte dessine des dizaines de milliers
+         de points sans effort : on n'allège plus que les tracés vraiment énormes, et
+         seulement d'un point tous les 4 m — sinon, à l'échelle de la rue, le tracé
+         coupe les virages et paraît filer en ligne droite. */
+      if (pts.length > 20000) {
         var thin = [pts[0]], idxs = [0], lastP = pts[0];
         for (var k = 1; k < pts.length - 1; k++) {
-          if (haversine(lastP, pts[k]) >= 12) { thin.push(pts[k]); idxs.push(k); lastP = pts[k]; }
+          if (haversine(lastP, pts[k]) >= 4) { thin.push(pts[k]); idxs.push(k); lastP = pts[k]; }
         }
         thin.push(pts[pts.length - 1]); idxs.push(pts.length - 1);
         pts = thin; origin = idxs;
@@ -1636,7 +1640,8 @@ var L = (function () {
     sheet.style.transform = 'translateY(' + Math.round(h - px) + 'px)';
     document.documentElement.style.setProperty('--sheet-h', Math.round(px) + 'px');
     document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : Math.round(px) + 6) + 'px');
-    fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14) + 'px';
+    /* au-dessus de la pastille (44 px) + 10 px d'écart ; en guidage, la pastille disparaît */
+    fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14 + 54) + 'px';
       try { updateRecenter(); } catch (e) {}
     try { updateVehPill(); } catch (e) {}
   }
