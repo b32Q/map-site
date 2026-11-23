@@ -240,6 +240,14 @@
   .toast.on{opacity:1;visibility:visible;transform:translate(-50%,0)}
 
   /* options */
+  .gwrap{position:absolute;inset:0;z-index:1200;background:#fff;display:flex;flex-direction:column}
+  .gwrap[hidden]{display:none}
+  .gwrap iframe{flex:1;width:100%;border:0;display:block}
+  .gbar{display:flex;align-items:center;gap:10px;padding:10px 12px calc(12px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);background:#fff}
+  .gx{width:38px;height:38px;border-radius:50%;background:var(--chip);display:grid;place-items:center;flex:none}
+  .glink{flex:1;text-align:center;font-size:13.5px;font-weight:600;color:var(--blue);text-decoration:none;
+    padding:10px;border-radius:12px;background:rgba(47,107,255,.09)}
   .ovl{position:absolute;inset:0;z-index:1100;background:rgba(11,18,32,.42);display:flex;align-items:flex-end;
     opacity:0;visibility:hidden;transition:opacity .2s ease,visibility .2s}
   .ovl.on{opacity:1;visibility:visible}
@@ -306,6 +314,11 @@
       <button class="fab" id="recenter" type="button" aria-label="Recentrer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
       </button>
+      <button class="fab" id="gbtn" type="button" aria-label="Voir sur Google Maps" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
+        </svg>
+      </button>
     </div>
 
     <div class="hud" id="hud" role="status" aria-live="polite">
@@ -351,6 +364,17 @@
       <button class="grip" id="grip" type="button" aria-label="Réduire ou agrandir la fiche"><span></span></button>
       <div class="sheet-body" id="sheet-body"></div>
     </section>
+
+    <div class="gwrap" id="gwrap" hidden>
+      <iframe id="gframe" title="Itinéraire Google Maps" referrerpolicy="no-referrer-when-downgrade"
+              allow="geolocation" loading="lazy"></iframe>
+      <div class="gbar">
+        <button class="gx" id="gx" type="button" aria-label="Fermer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:16px;height:16px"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <a class="glink" id="glink" href="#" target="_blank" rel="noopener">Ouvrir dans l'application Google Maps</a>
+      </div>
+    </div>
 
     <div class="ovl" id="ovl" role="dialog" aria-modal="true" aria-label="Options du trajet">
       <div class="ovl-card">
@@ -484,6 +508,37 @@
      chemin plusieurs fois par image, avec des états intermédiaires différents :
      c'est ce qui faisait « trembler » le trait. On ne garde donc qu'un seul
      redessin, celui que Leaflet ne fait pas : le changement d'angle. */
+  /* ---------- fenêtre Google Maps (iframe, sans clé) ---------- */
+  var gbtn = document.getElementById('gbtn'), gwrap = document.getElementById('gwrap'),
+      gframe = document.getElementById('gframe'), glink = document.getElementById('glink');
+
+  function googlePoints() {
+    var from = (state.route && state.route.pts && state.route.pts.length)
+      ? state.route.pts[0]
+      : (state.pos ? [state.pos.lat, state.pos.lon] : null);
+    var d = state.dest;
+    if (!from || !d) return null;
+    return { from: from, to: [d.lat, d.lon] };
+  }
+  function updateGoogleBtn() {
+    if (gbtn) gbtn.hidden = !googlePoints();
+  }
+  function openGoogle() {
+    var g = googlePoints();
+    if (!g) return;
+    var f = g.from[0].toFixed(6) + ',' + g.from[1].toFixed(6);
+    var t = g.to[0].toFixed(6) + ',' + g.to[1].toFixed(6);
+    gframe.src = 'https://maps.google.com/maps?saddr=' + f + '&daddr=' + t + '&dirflg=d&output=embed';
+    glink.href = 'https://www.google.com/maps/dir/?api=1&origin=' + f + '&destination=' + t + '&travelmode=driving';
+    gwrap.hidden = false;
+  }
+  function closeGoogle() {
+    gwrap.hidden = true;
+    gframe.src = 'about:blank';
+  }
+  if (gbtn) gbtn.addEventListener('click', openGoogle);
+  if (document.getElementById('gx')) document.getElementById('gx').addEventListener('click', closeGoogle);
+
   function redrawSoon() {
     requestAnimationFrame(redrawRoute);
   }
@@ -1023,6 +1078,7 @@
 
   /* ---------- fiche ---------- */
   function renderHome() {
+    updateGoogleBtn();
     state.phase = 'home';
     var h = '<h2>Où va-t-on ?</h2>' +
       '<p class="sub">' + (state.pos ? 'Départ : ' + escapeHtml((state.posLabel || 'ma position').replace(' · position approximative', ' (approx.)'))
@@ -1169,6 +1225,7 @@
       smoothFactor: 0.3, interactive: false, renderer: routeRenderer
     }).addTo(map);
     drawArrows(sel);
+    updateGoogleBtn();
   }
   function drawArrows(route) {
     arrowLayers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
@@ -1384,6 +1441,7 @@
     if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
     if (casingLayer) { map.removeLayer(casingLayer); casingLayer = null; }
     setSheetMode('open');
+    updateGoogleBtn();
     if (state.routes.length) { drawRoutes(); renderRoutes(); fitToRoute(); }
     else renderHome();
     setSheetHeight();
