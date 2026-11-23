@@ -298,6 +298,79 @@
   .sw[aria-pressed="true"]::after{transform:translateX(18px)}
   #clear-recents{min-height:40px;padding:6px 2px}
   #voice-test{min-height:40px}
+
+  /* ---------- interface type application de navigation ---------- */
+  .top{left:14px;right:auto;top:calc(12px + env(safe-area-inset-top))}
+  .menubtn{position:relative;width:48px;height:48px;border-radius:16px;background:#fff;
+    display:grid;place-items:center;color:#20242b;
+    box-shadow:0 12px 26px -14px rgba(11,18,32,.5),0 0 0 1px rgba(16,24,40,.06);
+    transition:transform .15s ease, box-shadow .2s}
+  .menubtn:active{transform:scale(.96)}
+  .menubtn svg{width:22px;height:22px}
+  .menubtn .dot{position:absolute;right:12px;top:12px;width:7px;height:7px;border-radius:50%;
+    background:#f97066;box-shadow:0 0 0 2px #fff}
+  .vehpill{position:absolute;left:14px;bottom:calc(var(--sheet-h,220px) + 12px);z-index:885;
+    display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 13px;
+    border-radius:22px;background:var(--blue);color:#fff;font-size:14.5px;font-weight:600;
+    letter-spacing:-.01em;box-shadow:0 14px 28px -14px rgba(47,107,255,.85);
+    transition:bottom .3s cubic-bezier(.22,.68,.24,1),transform .15s}
+  .vehpill:active{transform:scale(.97)}
+  .vehpill svg{width:17px;height:17px;flex:none}
+  .vehpill .chev{opacity:.8;width:15px;height:15px;margin-left:-2px}
+  .fab-col{left:14px;right:auto;bottom:calc(var(--sheet-h,220px) + 66px)}
+  .sheet .search{height:50px;margin:0 0 8px;background:#f1f3f7;box-shadow:none;border-radius:14px;
+    padding:0 6px 0 14px}
+  .sheet .search .x{background:#e6e9ee}
+  .sheet .search:focus-within{box-shadow:0 0 0 2px rgba(47,107,255,.30)}
+  .sheet .sugg{margin:0 0 10px;max-height:46vh;background:#fff;border:1px solid var(--line);
+    box-shadow:none;border-radius:14px}
+
+  /* ---------- accueil : raccourcis et ligne de départ ---------- */
+  .shortcuts{display:flex;gap:8px;margin:2px 0 12px;overflow-x:auto;padding-bottom:2px}
+  .shortcuts::-webkit-scrollbar{display:none}
+  .shortcut{display:flex;align-items:center;gap:8px;height:44px;padding:0 14px 0 8px;border-radius:14px;
+    background:#f1f3f7;font-size:13.5px;font-weight:550;color:#20242b;white-space:nowrap;flex:none;
+    max-width:190px;transition:background .15s,transform .12s}
+  .shortcut:active{transform:scale(.98);background:#e8ebf1}
+  .shortcut .ico{width:28px;height:28px;border-radius:9px;background:#fff;display:grid;place-items:center;flex:none}
+  .shortcut .ico svg{width:14px;height:14px;color:#344054}
+  .shortcut .sc-t{overflow:hidden;text-overflow:ellipsis}
+  .shortcut.new{background:#eaf1ff;color:#1d4ed8;font-weight:600}
+  .shortcut.new .ico{background:#fff;color:#1d4ed8}
+  .deprow{display:flex;align-items:center;gap:10px;padding:10px 2px 12px;border-bottom:1px solid var(--line)}
+  .dep-ico{width:30px;height:30px;border-radius:50%;background:#eaf1ff;color:#2f6bff;display:grid;place-items:center;flex:none}
+  .dep-ico svg{width:15px;height:15px}
+  .dep-txt{display:flex;flex-direction:column;min-width:0;flex:1}
+  .dep-lab{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .dep-val{font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dep-edit{font-size:12.5px;font-weight:600;color:var(--blue);padding:8px 10px;border-radius:10px;flex:none}
+  .dep-edit:active{background:#eaf1ff}
+  /* point de position plus discret */
+  .me-dot{width:14px;height:14px;border-radius:50%;background:#2f6bff;box-shadow:0 0 0 3px #fff,0 2px 8px rgba(11,18,32,.35)}
+
+  /* ---------- panneau Paramètres ---------- */
+  .ovl-card{padding-top:8px}
+  .ovl-head{padding:6px 0 8px;position:sticky;top:0;background:#fff;z-index:3}
+  .ovl-head h3{font-size:20px;font-weight:650;letter-spacing:-.015em}
+  .set-card{background:#f6f7f9;border-radius:16px;padding:0 14px;margin-top:6px}
+  .set-card .row{padding:13px 0;border-bottom:1px solid #e9ebef}
+  .set-card .row:last-child{border-bottom:0}
+  .set-card .lab{font-size:14.5px}
+  .set-card .hint{font-size:11.5px;margin-top:2px}
+  .set-card.about .row{padding:11px 0}
+  .set-note{font-size:11.5px;color:var(--muted);text-align:center;margin:14px 0 4px;line-height:1.5}
+  .plain{height:38px;padding:0 14px;border-radius:11px;background:#fff;font-size:13px;font-weight:600;
+    color:#344054;box-shadow:0 0 0 1px rgba(16,24,40,.08);flex:none}
+  .plain:active{background:#eef1f5}
+  .plain.danger{color:#b42318}
+  .planinput{height:38px;border-radius:11px;background:#fff;box-shadow:0 0 0 1px rgba(16,24,40,.08)}
+  .seg{background:#eceff3;padding:4px;border-radius:14px;margin-top:6px}
+  .seg button{height:40px;border-radius:11px;font-size:13.5px}
+  .sec-title{margin:20px 0 2px}
+
+  /* chevrons du tracé : visibles seulement quand on est assez près */
+  body.lowzoom .rarrow{display:none}
+  .rarrow svg{width:100%;height:100%}
 </style>
 </head>
 <body>
@@ -308,17 +381,22 @@
     <div id="map" role="application" aria-label="Carte et itinéraire"></div>
 
     <div class="top" id="top">
+      <button class="menubtn" id="menu" type="button" aria-label="Paramètres et menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        <i class="dot" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="searchwrap" id="searchwrap">
       <div class="search" id="searchbox">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>
         <input id="q" type="text" placeholder="Où va-t-on ?" autocomplete="off" spellcheck="false" aria-label="Adresse de destination">
         <button class="x" id="clearq" type="button" aria-label="Effacer">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:14px;height:14px"><path d="M6 6l12 12M18 6L6 18"/></svg>
         </button>
-        <button class="gear" id="gear" type="button" aria-label="Réglages du trajet">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h9M17 8h3M4 16h4M12 16h8"/><circle cx="15" cy="8" r="2.2"/><circle cx="10" cy="16" r="2.2"/></svg>
-        </button>
+
       </div>
       <div class="sugg" id="sugg" hidden></div>
+    </div>
     </div>
 
     <div class="banner" id="banner" role="status" aria-live="polite">
@@ -377,6 +455,12 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+    <button class="vehpill" id="vehpill" type="button" aria-label="Changer de type de véhicule">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
+      <span id="vehpill-txt">Voiture</span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></svg>
+    </button>
+
     <section class="sheet" id="sheet" aria-label="Destination et itinéraires">
       <button class="grip" id="grip" type="button" aria-label="Réduire ou agrandir la fiche"><span></span></button>
       <div class="sheet-body" id="sheet-body"></div>
@@ -393,53 +477,76 @@
       </div>
     </div>
 
-    <div class="ovl" id="ovl" role="dialog" aria-modal="true" aria-label="Options du trajet">
+    <div class="ovl" id="ovl" role="dialog" aria-modal="true" aria-label="Paramètres">
       <div class="ovl-card">
         <div class="ovl-head">
-          <h3>Options du trajet</h3>
+          <h3>Paramètres</h3>
           <button class="x" id="ovl-x" type="button" aria-label="Fermer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:15px;height:15px"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </div>
 
-        <p class="sec-title">Type de véhicule</p>
+        <p class="sec-title">Véhicule</p>
         <div class="seg" id="seg-costing">
           <button type="button" data-costing="auto" aria-pressed="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
             Voiture
           </button>
           <button type="button" data-costing="bicycle" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17l4-7h4M12 17l-2-5"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17l4-7h4M12 17l-2-5"/></svg>
             Vélo
           </button>
           <button type="button" data-costing="pedestrian" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg>
             À pied
           </button>
         </div>
 
         <div id="avoids-wrap">
-          <p class="sec-title">Routes à éviter</p>
-          <div id="avoids"></div>
+          <p class="sec-title">À éviter</p>
+          <div class="set-card" id="avoids"></div>
         </div>
 
         <p class="sec-title">Guidage</p>
-        <div class="row">
-          <span class="lab">Guidage vocal<span class="hint">voix du téléphone, en français</span></span>
-          <button class="sw" id="sw-voice" type="button" aria-pressed="true" aria-label="Guidage vocal"></button>
-        </div>
-        <div class="row">
-          <span class="lab">Annonces des virages<span class="hint" id="voice-test-hint">dans 300 m, tournez à droite</span></span>
-          <button class="plain" id="voice-test" type="button">Écouter</button>
+        <div class="set-card">
+          <div class="row">
+            <span class="lab">Guidage vocal<span class="hint">la voix du téléphone, en français</span></span>
+            <button class="sw" id="sw-voice" type="button" aria-pressed="true" aria-label="Guidage vocal"></button>
+          </div>
+          <div class="row">
+            <span class="lab">Annonces des virages<span class="hint" id="voice-test-hint">dans 300 m, tournez à droite</span></span>
+            <button class="plain" id="voice-test" type="button">Écouter</button>
+          </div>
         </div>
 
-        <p class="sec-title">Planifier le départ</p>
-        <div class="row">
-          <span class="lab">Heure de départ<span class="hint" id="plan-hint">maintenant</span></span>
-          <input class="planinput" type="datetime-local" id="plan-input" aria-label="Heure de départ prévue">
+        <p class="sec-title">Départ prévu</p>
+        <div class="set-card">
+          <div class="row">
+            <span class="lab">Heure de départ<span class="hint" id="plan-hint">maintenant</span></span>
+            <input class="planinput" type="datetime-local" id="plan-input" lang="fr" aria-label="Heure de départ prévue">
+          </div>
         </div>
         <button class="ghost" id="plan-clear" type="button">Partir maintenant</button>
-        <button class="ghost" id="reset-opts" type="button" style="color:#b42318">Réinitialiser mes préférences</button>
+
+        <p class="sec-title">Données</p>
+        <div class="set-card">
+          <div class="row">
+            <span class="lab">Destinations récentes<span class="hint">efface l’historique de recherche</span></span>
+            <button class="plain" id="set-clear-recents" type="button">Effacer</button>
+          </div>
+          <div class="row">
+            <span class="lab">Réinitialiser<span class="hint">voix, véhicule, routes à éviter</span></span>
+            <button class="plain danger" id="reset-opts" type="button">Réinitialiser</button>
+          </div>
+        </div>
+
+        <p class="sec-title">À propos</p>
+        <div class="set-card about">
+          <div class="row"><span class="lab">Carte<span class="hint">OpenFreeMap · données OpenStreetMap</span></span></div>
+          <div class="row"><span class="lab">Itinéraires<span class="hint">Valhalla · OSRM</span></span></div>
+          <div class="row"><span class="lab">Adresses<span class="hint">BAN · Nominatim</span></span></div>
+        </div>
+        <p class="set-note">Aucune clé, aucun compte — connexion internet nécessaire.</p>
       </div>
     </div>
   </div>
@@ -509,7 +616,7 @@ var L = (function () {
 
     var frName = ['coalesce', ['get', 'name:fr'], ['get', 'name']];
     ['label_city', 'label_city_capital', 'label_town', 'label_village', 'label_other',
-     'label_state', 'label_country', 'label_country_2', 'label_country_3',
+     'label_state', 'label_country', 'label_country_1', 'label_country_2', 'label_country_3',
      'water_name_point_label', 'water_name_line_label',
      'highway-name-major', 'highway-name-minor', 'highway-name-path'].forEach(function (id) {
       if (!mb.getLayer(id)) return;
@@ -526,7 +633,7 @@ var L = (function () {
     setL('label_town', 'text-size', 12.5);
     setL('label_village', 'text-size', 11.5);
     /* les noms de pays sont énormes dans ce style : on les calme */
-    ['label_country', 'label_country_2', 'label_country_3'].forEach(function (id) {
+    ['label_country', 'label_country_1', 'label_country_2', 'label_country_3'].forEach(function (id) {
       if (mb.getLayer(id)) {
         mb.setLayoutProperty(id, 'text-size', 13);
         mb.setPaintProperty(id, 'text-color', '#6b7280');
@@ -881,13 +988,16 @@ var L = (function () {
 
   /* épaisseur du trait adaptée au zoom : fine de loin, franche de près */
   function routeWeight(z) {
-    if (z >= 16) return 7;
-    if (z >= 14) return 6.5;
-    if (z >= 12) return 5.5;
-    if (z >= 10) return 4.5;
-    return 4;
+    if (z >= 16) return 7.5;
+    if (z >= 14) return 7;
+    if (z >= 12) return 6;
+    if (z >= 10) return 5.5;
+    if (z >= 8) return 5;
+    return 5;      /* de loin, un trait trop fin se lit comme des pointillés */
   }
   function applyRouteWeight() {
+    /* de loin, les chevrons blancs sur le trait se lisent comme des pointillés */
+    document.body.classList.toggle('lowzoom', map.getZoom() < 11);
     if (!routeLayer) return;
     var w = routeWeight(map.getZoom());
     routeLayer.setStyle({ weight: w });
@@ -921,6 +1031,7 @@ var L = (function () {
       smoothFactor: 0.3, interactive: false, renderer: routeRenderer
     }).addTo(map);
     drawArrows(sel);
+    try { applyRouteWeight(); } catch (e) {}
     updateGoogleBtn();
   }
 
@@ -1472,6 +1583,22 @@ var L = (function () {
   var bannerEl = document.getElementById('banner');
   var bannerTxt = document.getElementById('banner-txt');
   var sugg = document.getElementById('sugg');
+
+  /* Interface : la recherche vit dans la fiche, comme sur les applis de navigation.
+     Le bouton du haut ouvre les paramètres ; la pastille au-dessus de la fiche
+     rappelle le type de véhicule. */
+  (function placeSearch() {
+    var sh = document.getElementById('sheet');
+    var body = document.getElementById('sheet-body');
+    var sb = document.getElementById('searchbox');
+    var sg = document.getElementById('sugg');
+    var wrap = document.getElementById('searchwrap');
+    if (sh && body && sb) {
+      sh.insertBefore(sb, body);
+      if (sg) sh.insertBefore(sg, body);
+    }
+    if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+  })();
   var qInput = document.getElementById('q');
   var searchBox = document.getElementById('searchbox');
   var topEl = document.getElementById('top');
@@ -1511,6 +1638,7 @@ var L = (function () {
     document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : Math.round(px) + 6) + 'px');
     fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14) + 'px';
       try { updateRecenter(); } catch (e) {}
+    try { updateVehPill(); } catch (e) {}
   }
   function setSheetMode(mode, animate) {
     sheetMode = mode;
@@ -1732,22 +1860,46 @@ var L = (function () {
   function renderHome() {
     updateGoogleBtn();
     state.phase = 'home';
-    var h = '<h2>Où va-t-on ?</h2>' +
-      '<p class="sub">' + (state.pos ? 'Départ : ' + escapeHtml((state.posLabel || 'ma position').replace(' · position approximative', ' (approx.)'))
-        : state.posDenied ? 'Position non autorisée' : 'Recherche de ta position…') + '</p>' +
-      '<button class="chipbtn" data-opts="1">' + ICONS.sliders + escapeHtml(prefsLabel()) + '</button>';
+    var h = '';
+
+    /* raccourcis : les deux derniers trajets + une nouvelle recherche */
+    h += '<div class="shortcuts">';
+    state.recents.slice(0, 2).forEach(function (f, i) {
+      h += '<button class="shortcut" data-fav="' + i + '">' +
+        '<span class="ico">' + ICONS.recent + '</span>' +
+        '<span class="sc-t">' + escapeHtml(f.name) + '</span></button>';
+    });
+    h += '<button class="shortcut new" id="sc-new">' +
+      '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>' +
+      'Nouvelle destination</button>';
+    h += '</div>';
+
+    /* départ */
+    var dep = state.pos
+      ? (state.posLabel || 'ma position').replace(' · position approximative', ' (approx.)')
+      : state.posDenied ? 'Position non autorisée' : 'Recherche de ta position…';
+    h += '<div class="deprow">' +
+      '<span class="dep-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3.4"/></svg></span>' +
+      '<span class="dep-txt"><span class="dep-lab">Départ</span><span class="dep-val">' + escapeHtml(dep) + '</span></span>' +
+      (state.pos ? '<button class="dep-edit" id="pick-from" type="button">Modifier</button>' : '') +
+      '</div>';
 
     if (!state.pos) {
-      h += '<button class="go" id="pick-from" style="margin-top:12px">Indiquer mon point de départ</button>' +
+      h += '<button class="go" id="pick-from-go" style="margin-top:10px">Indiquer mon point de départ</button>' +
         '<button class="ghost" id="locate-btn">Réessayer ma position</button>' +
         '<p class="note1">' + escapeHtml(geoMessage()) + '</p>';
     } else if (state.pos.approx) {
-      h += '<button class="ghost" id="pick-from" style="margin-top:10px">Préciser mon point de départ</button>';
+      h += '<p class="note1">Position approximative : tu peux préciser ton point de départ.</p>';
     }
 
-    if (state.recents.length) {
-      h += '<p class="sec-title" style="margin-top:14px">Destinations récentes</p><div class="favs">';
-      state.recents.forEach(function (f, i) {
+    /* historique complet */
+    /* les deux derniers sont déjà en raccourcis : la liste ne montre que les suivants */
+    var rest = state.recents.slice(2);
+    if (rest.length) {
+      h += '<p class="sec-title">Autres destinations récentes</p><div class="favs">';
+      var offset = 2;
+      rest.forEach(function (f, k) {
+        var i = k + offset;
         var dist = state.pos ? ' · à ' + km(haversine([state.pos.lat, state.pos.lon], [f.lat, f.lon])) : '';
         h += '<div class="fav"><button class="fav-main" data-fav="' + i + '"><span class="ico">' + ICONS.recent + '</span>' +
           '<span><span class="t">' + escapeHtml(f.name) + '</span>' +
@@ -1756,22 +1908,36 @@ var L = (function () {
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:13px;height:13px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
       });
       h += '</div><button class="linkbtn" id="clear-recents">Effacer l’historique</button>';
-    } else if (state.pos) {
-      h += '<p class="note1">Cherche une adresse dans la barre du haut : elle apparaîtra ensuite ici.</p>';
+    } else if (state.pos && !state.pos.approx && !state.recents.length) {
+      h += '<p class="note1">Tape une adresse ci-dessus : elle apparaîtra ensuite ici, prête à relancer.</p>';
     }
 
     sheetBody.innerHTML = h;
     setSheetMode('open', false);
+
     var lb = document.getElementById('locate-btn');
     if (lb) lb.addEventListener('click', function () { state.posDenied = false; locate(); });
-    var pf = document.getElementById('pick-from');
-    if (pf) pf.addEventListener('click', startPickFrom);
+    ['pick-from', 'pick-from-go'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.addEventListener('click', startPickFrom);
+    });
+    var sn = document.getElementById('sc-new');
+    if (sn) sn.addEventListener('click', function () { qInput.focus(); qInput.select(); });
     var cr = document.getElementById('clear-recents');
     if (cr) cr.addEventListener('click', function () {
       state.recents = [];
       try { localStorage.removeItem(RECENT_KEY); } catch (e) {}
       renderHome();
       toast('Historique effacé');
+    });
+    Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-fav]'), function (b) {
+      b.addEventListener('click', function () {
+        var f = state.recents[Number(b.dataset.fav)];
+        if (!f) return;
+        qInput.value = f.name;
+        searchBox.classList.add('filled');
+        startRoutes(f);
+      });
     });
     Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-del]'), function (b) {
       b.addEventListener('click', function (e) {
@@ -1800,7 +1966,7 @@ var L = (function () {
     var best = state.routes.reduce(function (m, r) { return r.time < m.time ? r : m; }, state.routes[0]);
     var base = state.planTs || Date.now();
     var h = '<h2>' + escapeHtml(state.dest.name) + '</h2><p class="sub">' + escapeHtml(state.dest.sub || '') + '</p>' +
-      '<button class="chipbtn" data-opts="1">' + ICONS.sliders + escapeHtml(prefsLabel()) + '</button>';
+      '';
     if (state.planTs) h += '<br><span class="planline">Départ prévu ' + dayLabel(state.planTs) + '</span>';
 
     var cur = state.routes[state.sel] || state.routes[0];
@@ -2007,6 +2173,7 @@ var L = (function () {
     state.arrived = false;
     state.following = true;
     try { updateRecenter(); } catch (e) {}
+    try { updateVehPill(); } catch (e) {}
     state.lastStep = -1;
     state.ri = 0;
     hideBanner();
@@ -2411,7 +2578,8 @@ var L = (function () {
   });
   updateRecenter();
 
-  document.getElementById('gear').addEventListener('click', openOpts);
+  if (document.getElementById('gear')) document.getElementById('gear').addEventListener('click', openOpts);
+  document.getElementById('menu').addEventListener('click', openOpts);
 
   /* ---------- options ---------- */
   var AVOIDS = [
@@ -2468,6 +2636,20 @@ var L = (function () {
     savePrefs();
   }
 
+  /* pastille au-dessus de la fiche : rappelle le véhicule et ouvre les paramètres */
+  var COST_LABEL = { auto: 'Voiture', bicycle: 'Vélo', pedestrian: 'À pied' };
+  function updateVehPill() {
+    var p = document.getElementById('vehpill');
+    if (!p) return;
+    var t = document.getElementById('vehpill-txt');
+    if (t) t.textContent = COST_LABEL[state.prefs.costing] || 'Voiture';
+    p.hidden = !!state.navigating;
+  }
+  (function wireVehPill() {
+    var p = document.getElementById('vehpill');
+    if (p) p.addEventListener('click', openOpts);
+  })();
+
   function openOpts() {
     renderAvoids();
     Array.prototype.forEach.call(document.querySelectorAll('#seg-costing button'), function (b) {
@@ -2516,8 +2698,17 @@ var L = (function () {
       });
       savePrefs();
       renderAvoids();
+      try { updateVehPill(); } catch (e) {}
       recompute();
     });
+  });
+
+  var setClear = document.getElementById('set-clear-recents');
+  if (setClear) setClear.addEventListener('click', function () {
+    state.recents = [];
+    try { localStorage.removeItem(RECENT_KEY); } catch (e) {}
+    if (state.phase === 'home') renderHome();
+    toast('Historique effacé');
   });
 
   document.getElementById('sw-voice').addEventListener('click', function () { setVoice(!state.prefs.voice); });
