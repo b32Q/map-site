@@ -693,12 +693,11 @@
       routeFramePending = false;
       if (!routeRenderer || !routeRenderer._map) return;
       if (map._animatingZoom) return;                 /* Leaflet anime déjà le canvas */
-      routeRenderer._updateTransform(map.getCenter(), map.getZoom());   /* bon marché */
-      if (Date.now() - lastReproject > 250) {          /* reprojection périodique */
-        lastReproject = Date.now();
-        routeRenderer._update();
-        lastZoomDrawn = map.getZoom();
-      }
+      /* Pendant le geste : SEULEMENT la transformation (échelle + décalage), calculée
+         à partir du zoom pour lequel le tracé a été dessiné — exactement le traitement
+         que Leaflet applique à un niveau de tuiles. Aucune reconstruction du chemin :
+         le tracé suit la carte au pixel près, sans à-coup ni dérive. */
+      routeRenderer._updateTransform(map.getCenter(), map.getZoom());
     });
   }
   map.on('zoom', function () {
@@ -797,7 +796,17 @@
     return v + (av.length ? ' · ' + av.join(', ') : '');
   }
 
+  /* Valhalla d'abord ; si le service ne répond pas (saturation, coupure), on bascule
+     automatiquement sur OSRM (autre service public gratuit, mêmes données OSM).
+     L'application ne reste donc jamais sans itinéraire. */
   function valhalla(from, to, extra) {
+    return valhallaTry(from, to, extra).catch(function (e) {
+      try { console.warn('Valhalla indisponible (' + e.message + ') → repli OSRM'); } catch (_) {}
+      return osrmRoute(from, to, extra);
+    });
+  }
+
+  function valhallaTry(from, to, extra) {
     var body = {
       locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
       costing: 'auto',
@@ -851,6 +860,75 @@
         if (st.street && seg > bestD) { bestD = seg; main = st.street; }
       });
       return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
+    });
+  }
+
+  /* ---------- repli : OSRM (routing.openstreetmap.de), gratuit et sans clé ---------- */
+  function osrmText(st) {
+    var t = st.maneuver.type, mod = st.maneuver.modifier || '';
+    var name = st.name ? ' sur ' + st.name : '';
+    if (t === 'depart') return 'Prenez' + (st.name ? ' ' + st.name : ' la route');
+    if (t === 'arrive') return 'Vous êtes arrivé à destination';
+    if (t === 'roundabout' || t === 'rotary' || t === 'exit roundabout' || t === 'exit rotary')
+      return 'Au rond-point, prenez la ' + (st.maneuver.exit || 1) + 'e sortie' + name;
+    if (mod.indexOf('sharp left') >= 0) return 'Tournez fortement à gauche' + name;
+    if (mod.indexOf('slight left') >= 0) return 'Serrez à gauche' + name;
+    if (mod.indexOf('left') >= 0) return 'Tournez à gauche' + name;
+    if (mod.indexOf('sharp right') >= 0) return 'Tournez fortement à droite' + name;
+    if (mod.indexOf('slight right') >= 0) return 'Serrez à droite' + name;
+    if (mod.indexOf('right') >= 0) return 'Tournez à droite' + name;
+    if (t === 'merge' || t === 'on ramp') return 'Insérez-vous' + name;
+    if (t === 'off ramp') return 'Prenez la sortie' + name;
+    if (t === 'fork') return 'À la fourche, continuez' + name;
+    return 'Continuez' + name;
+  }
+  function osrmType(st) {
+    var t = st.maneuver.type, mod = st.maneuver.modifier || '';
+    if (t === 'depart') return 1;
+    if (t === 'arrive') return 4;
+    if (t === 'roundabout' || t === 'rotary' || t === 'exit roundabout' || t === 'exit rotary') return 26;
+    if (mod.indexOf('left') >= 0) return 19;      /* icône « à gauche » */
+    if (mod.indexOf('right') >= 0) return 20;     /* icône « à droite » */
+    return 8;                                     /* tout droit */
+  }
+  function osrmRoute(from, to, extra) {
+    var cost = (extra && extra.costing) || 'auto';
+    var prof = cost === 'bicycle' ? 'bike' : cost === 'pedestrian' ? 'foot' : 'car';
+    var excl = [], co = extra && extra.costing_options && extra.costing_options.auto;
+    if (co) {
+      if (co.use_tolls === 0) excl.push('toll');
+      if (co.use_highways === 0) excl.push('motorway');
+      if (co.use_ferry === 0) excl.push('ferry');
+    }
+    var url = 'https://routing.openstreetmap.de/routed-' + prof + '/route/v1/driving/' +
+      from.lon + ',' + from.lat + ';' + to.lon + ',' + to.lat +
+      '?overview=full&geometries=geojson&steps=true' +
+      (excl.length ? '&exclude=' + excl.join(',') : '');
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('osrm ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      if (!d.routes || !d.routes.length) throw new Error('pas d’itinéraire');
+      var rt = d.routes[0], leg = rt.legs[0];
+      var pts = rt.geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
+      var cum = [0];
+      for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
+      var at = 0, steps = [];
+      (leg.steps || []).forEach(function (st) {
+        var txt = osrmText(st);
+        if (txt) steps.push({ text: txt, at: at, type: osrmType(st), street: st.name || '' });
+        at += st.distance || 0;
+      });
+      var main = '', bestD = 0;
+      steps.forEach(function (st, i) {
+        var seg = (steps[i + 1] ? steps[i + 1].at : cum[cum.length - 1]) - st.at;
+        if (st.street && seg > bestD) { bestD = seg; main = st.street; }
+      });
+      return {
+        pts: pts, cum: cum,
+        length: rt.distance, time: rt.duration,
+        steps: steps, main: main
+      };
     });
   }
 
