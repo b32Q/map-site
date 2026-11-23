@@ -669,28 +669,47 @@
      fait quand seul le déplacement change (le canvas est alors simplement
      translaté, ce qui est exact).
      --------------------------------------------------------------------- */
-  var routeRedrawPending = false, lastZoomDrawn = null;
-  function scheduleRouteRedraw() {
-    if (routeRedrawPending) return;
-    routeRedrawPending = true;
+  var routeFramePending = false, lastReproject = 0, lastZoomDrawn = null;
+
+  /* Deux opérations distinctes, et c'est là qu'était le problème :
+
+     1. à CHAQUE image (bon marché) : on met à jour la transformation du canvas.
+        `_updateTransform` recalcule l'échelle et le décalage à partir du zoom pour
+        lequel le tracé a été dessiné — c'est exactement ce que fait Leaflet pour un
+        niveau de tuiles. Le tracé suit donc la carte au pixel près, à toutes les
+        étapes du pincement, sans reconstruire le chemin.
+
+     2. de temps en temps (coûteux) : on reprojette réellement le chemin
+        (`_update`), pour rafraîchir la géométrie au zoom courant, et à la fin du geste.
+
+     Avant, seule l'opération 2 existait, à chaque image : sur un téléphone, la
+     reconstruction de plusieurs milliers de points ne tient pas 60 images/s, donc
+     entre deux reconstructions le tracé gardait l'échelle de l'ancien zoom — et
+     l'écart grandissait avec l'amplitude du dézoom. */
+  function frameSync() {
+    if (routeFramePending) return;
+    routeFramePending = true;
     requestAnimationFrame(function () {
-      routeRedrawPending = false;
+      routeFramePending = false;
       if (!routeRenderer || !routeRenderer._map) return;
-      /* Pendant une animation de zoom, Leaflet applique lui-même la transformation
-         au canvas : inutile (et coûteux) de le redessiner. Sinon on reprojette. */
-      if (!map._animatingZoom) routeRenderer._update();
-      lastZoomDrawn = map.getZoom();
+      if (map._animatingZoom) return;                 /* Leaflet anime déjà le canvas */
+      routeRenderer._updateTransform(map.getCenter(), map.getZoom());   /* bon marché */
+      if (Date.now() - lastReproject > 250) {          /* reprojection périodique */
+        lastReproject = Date.now();
+        routeRenderer._update();
+        lastZoomDrawn = map.getZoom();
+      }
     });
   }
   map.on('zoom', function () {
     if (!inGesture()) return;
-    var z = map.getZoom();
-    if (lastZoomDrawn !== null && Math.abs(z - lastZoomDrawn) < 0.0005) return;  /* déplacement seul */
-    scheduleRouteRedraw();
+    frameSync();
   });
   function endGestureRedraw() {
     lastZoomDrawn = null;
-    scheduleRouteRedraw();
+    lastReproject = 0;
+    if (!routeRenderer || !routeRenderer._map) return;
+    routeRenderer._update();                           /* géométrie exacte au repos */
   }
   map.on('zoomend', function () { applyRouteWeight(); endGestureRedraw(); });
   map.on('moveend', function () { if (!inGesture()) endGestureRedraw(); });
