@@ -657,25 +657,35 @@
   }
   map.on('rotateend', redrawRoute);
 
-  /* reprojection pendant un pincement : la carte change de zoom en continu, le canvas
-     ne fait que déplacer son image. On reprojette à chaque cran, au plus 11 fois/s. */
-  var routeRedrawPending = false, lastZoomDrawn = null, lastRedrawAt = 0;
+  /* ---------------------------------------------------------------------
+     Reprojection synchronisée avec l'affichage.
+
+     Pendant un pincement le zoom change à chaque image. Le canvas ne fait que
+     déplacer son image : sans reprojection, le tracé reste dessiné pour un
+     zoom périmé et se décale donc par rapport aux routes.
+
+     On reprojette donc **une fois par image affichée** (requestAnimationFrame),
+     sans plafond de fréquence : un redessin par image, pas plus. Rien n'est
+     fait quand seul le déplacement change (le canvas est alors simplement
+     translaté, ce qui est exact).
+     --------------------------------------------------------------------- */
+  var routeRedrawPending = false, lastZoomDrawn = null;
   function scheduleRouteRedraw() {
     if (routeRedrawPending) return;
     routeRedrawPending = true;
     requestAnimationFrame(function () {
       routeRedrawPending = false;
       if (!routeRenderer || !routeRenderer._map) return;
-      routeRenderer._update();
+      /* Pendant une animation de zoom, Leaflet applique lui-même la transformation
+         au canvas : inutile (et coûteux) de le redessiner. Sinon on reprojette. */
+      if (!map._animatingZoom) routeRenderer._update();
       lastZoomDrawn = map.getZoom();
-      lastRedrawAt = Date.now();
     });
   }
   map.on('zoom', function () {
     if (!inGesture()) return;
     var z = map.getZoom();
-    if (lastZoomDrawn !== null && Math.abs(z - lastZoomDrawn) < 0.02) return;
-    if (Date.now() - lastRedrawAt < 90) return;
+    if (lastZoomDrawn !== null && Math.abs(z - lastZoomDrawn) < 0.0005) return;  /* déplacement seul */
     scheduleRouteRedraw();
   });
   function endGestureRedraw() {
@@ -2046,3 +2056,5 @@
 </script>
 </body>
 </html>
+
+200
