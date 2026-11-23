@@ -53,8 +53,7 @@
 
   #map{position:absolute;inset:0;background:#e9e6df;font-family:inherit;z-index:0}
   .leaflet-container{background:#e9e6df;font-family:inherit}
-  /* fond façon GPS : végétation en taches pâles, bâti neutre, routes grises lisibles */
-  .leaflet-tile-pane{filter:saturate(.40) brightness(1.06) contrast(1.16)}
+  /* le filtre du fond est appliqué par le code, selon le fournisseur de tuiles */
   .leaflet-bottom.leaflet-left{bottom:calc(var(--credit,240px) + 2px);transition:bottom .3s cubic-bezier(.22,.68,.24,1)}
   .leaflet-control-attribution{font-size:9.5px!important;background:rgba(255,255,255,.84)!important;color:#8a8f9c!important;padding:2px 7px!important;border-radius:3px!important;margin:0!important}
   .leaflet-control-attribution a{color:#8a8f9c!important;text-decoration:none}
@@ -478,23 +477,33 @@
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
   L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 110 }).addTo(map);
 
-  /* Fond de carte OpenStreetMap uniquement : c'est la même source de données que
-     Valhalla, donc les axes dessinés et le tracé calculé coïncident exactement.
-     Esri (HERE/Garmin) dessine ses routes à partir d'une autre base : le tracé
-     pouvait sembler décalé de quelques mètres, sans qu'il y ait d'erreur de calcul. */
+  /* Fond de carte Google en premier (rendu « Google Maps » classique, tuiles 2× pour
+     rester net sur téléphone), OpenStreetMap France puis Allemagne en secours si les
+     tuiles Google ne répondent pas : la carte ne reste jamais vide. */
   var TILES = [
-    { url: 'https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap France' },
-    { url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap Deutschland' }
+    { url: 'https://mt{s}.google.com/vt/lyrs=m&hl=fr&x={x}&y={y}&z={z}&scale=2',
+      subdomains: ['0', '1', '2', '3'], big: true,
+      attr: 'Fond de carte &copy; Google', filter: 'none' },
+    { url: 'https://a.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+      attr: '&copy; OpenStreetMap France', filter: 'saturate(.40) brightness(1.06) contrast(1.16)' },
+    { url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+      attr: '&copy; OpenStreetMap Deutschland', filter: 'saturate(.40) brightness(1.06) contrast(1.16)' }
   ];
   var tiles = null, tAt = -1, tErr = 0;
   function useTiles(i) {
     if (i >= TILES.length) return;
     if (tiles) map.removeLayer(tiles);
     tAt = i; tErr = 0;
-    tiles = L.tileLayer(TILES[i].url, {
+    var opt = {
       maxZoom: 19, crossOrigin: true, detectRetina: false, attribution: TILES[i].attr,
       updateWhenIdle: false, updateWhenZooming: false, keepBuffer: 6
-    }).addTo(map);
+    };
+    if (TILES[i].subdomains) opt.subdomains = TILES[i].subdomains;
+    if (TILES[i].big) { opt.tileSize = 512; opt.zoomOffset = -1; }   /* tuiles 2× */
+    tiles = L.tileLayer(TILES[i].url, opt).addTo(map);
+    /* chaque fournisseur a son propre rendu : on ajuste le filtre */
+    var pane = document.querySelector('.leaflet-tile-pane');
+    if (pane) pane.style.filter = TILES[i].filter || 'none';
     tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
   }
   useTiles(0);
