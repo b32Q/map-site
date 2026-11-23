@@ -443,11 +443,12 @@
     center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
     minZoom: 4, maxBounds: [[40.5, -6.8], [52.6, 10.8]], maxBoundsViscosity: 0.35,
     zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
-    /* Animation de zoom de Leaflet laissée active : pendant le zoom, tuiles et tracé sont
-       agrandis par la même transformation CSS, donc le tracé ne peut pas se désolidariser
-       des routes. C'est la reprojection image par image (animation coupée) qui faisait
-       « trembler » le trait. */
-    preferCanvas: false, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
+    /* Tracé en canvas (image bitmap) et non en SVG : quand la carte se déplace d'un
+       demi-pixel, un trait SVG est redessiné à chaque image et son antialiasing change —
+       c'est ce qui « tremble ». Un canevas se contente d'être déplacé, sans être redessiné.
+       L'animation de zoom reste active : pendant le zoom, tuiles et canevas sont agrandis
+       par la même transformation CSS. */
+    preferCanvas: true, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
     rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
   });
   L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
@@ -488,6 +489,39 @@
   }
   map.on('rotateend', redrawRoute);
 
+  /* Pendant un pincement, la carte change de zoom en continu. Le canvas, lui, ne fait
+     que déplacer son image : le tracé resterait dessiné pour l'ancien zoom. On le
+     reprojette donc à chaque cran de zoom pendant le geste (une passe pour tout le
+     moteur, jamais à chaque image quand seul le déplacement change). */
+  var routeRedrawPending = false, lastZoomDrawn = null, lastRedrawAt = 0;
+
+  function scheduleRouteRedraw() {
+    if (routeRedrawPending) return;
+    routeRedrawPending = true;
+    requestAnimationFrame(function () {
+      routeRedrawPending = false;
+      if (!routeRenderer || !routeRenderer._map) return;
+      routeRenderer._update();            /* reprojette tous les tracés de ce moteur */
+      lastZoomDrawn = map.getZoom();
+      lastRedrawAt = Date.now();
+    });
+  }
+
+  map.on('zoom', function () {
+    if (!inGesture()) return;             /* hors geste, Leaflet gère déjà */
+    var z = map.getZoom();
+    if (lastZoomDrawn !== null && Math.abs(z - lastZoomDrawn) < 0.02) return;  /* déplacement seul */
+    if (Date.now() - lastRedrawAt < 90) return;                                /* au plus 11 fois/s */
+    scheduleRouteRedraw();
+  });
+
+  function endGestureRedraw() {
+    lastZoomDrawn = null;
+    scheduleRouteRedraw();                /* dernière passe, géométrie exacte */
+  }
+  map.on('zoomend', endGestureRedraw);
+  map.on('moveend', function () { if (!inGesture()) endGestureRedraw(); });
+
   map.on('rotate', updateNeedle);
   map.on('rotateend', updateNeedle);
 
@@ -501,6 +535,11 @@
 
   var destMarker = null, carMarker = null, jamMarker = null;
   var altLayers = [], routeLayer = null, casingLayer = null, arrowLayers = [], jamLayer = null, jamCasing = null;
+  /* Moteur de rendu propre au tracé, SANS marge interne (padding: 0) : le tracé et les
+     tuiles utilisent alors exactement le même point de référence, y compris pendant un
+     pincement où la carte change de zoom en continu.
+     `tolerance` bas pour ne pas simplifier les courbes. */
+  var routeRenderer = L.canvas({ padding: 0, tolerance: 0.4 });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -603,12 +642,31 @@
       if (!trip) throw new Error('pas d’itinéraire');
       var leg = trip.legs[0];
       var pts = decodeShape(leg.shape);
+      /* au-delà de ~4000 points, on garde un point tous les 12 m : invisible à l'écran,
+         beaucoup plus léger à redessiner (le canevas redessine tout à chaque zoom).
+         `origin` conserve l'indice d'origine de chaque point gardé, pour retrouver la
+         position des consignes de guidage après l'allègement. */
+      var origin = null;
+      if (pts.length > 4000) {
+        var thin = [pts[0]], idxs = [0], lastP = pts[0];
+        for (var k = 1; k < pts.length - 1; k++) {
+          if (haversine(lastP, pts[k]) >= 12) { thin.push(pts[k]); idxs.push(k); lastP = pts[k]; }
+        }
+        thin.push(pts[pts.length - 1]); idxs.push(pts.length - 1);
+        pts = thin; origin = idxs;
+      }
+      function shapeToNew(i) {
+        if (!origin) return Math.min(i, pts.length - 1);
+        var lo = 0, hi = origin.length - 1;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (origin[mid] < i) lo = mid + 1; else hi = mid; }
+        return lo;
+      }
       var cum = [0];
       for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
       var steps = (leg.maneuvers || []).map(function (m) {
         return {
           text: m.instruction || '',
-          at: cum[Math.min(m.begin_shape_index || 0, cum.length - 1)] || 0,
+          at: cum[shapeToNew(m.begin_shape_index || 0)] || 0,
           type: m.type,
           street: (m.street_names && m.street_names[0]) || ''
         };
@@ -673,14 +731,25 @@
   }
 
   /* la carte occupe exactement l'écran : aucun décalage possible entre les calques */
-  var lastW = 0, lastH = 0, gestureUntil = 0;
+  var mapEl = document.getElementById('map');
+  var lastW = 0, lastH = 0;
+  /* « l'utilisateur touche la carte en ce moment » : suivi sur les vrais événements
+     d'entrée (les événements Leaflet se mélangent aux déplacements automatiques) */
+  var gesteJusqua = 0;
+  function inGesture() { return Date.now() < gesteJusqua; }
+  function markGesture() { gesteJusqua = Date.now() + 400; }
+  ['touchstart', 'touchmove', 'wheel', 'mousedown', 'mousemove', 'pointerdown', 'pointermove']
+    .forEach(function (ev) {
+      mapEl.addEventListener(ev, markGesture, { passive: true });
+    });
+
   function sizeMap(force) {
     var scr = document.querySelector('.screen');
     var w = scr.clientWidth, h = scr.clientHeight;
     /* Chrome sur telephone declenche « resize » quand la barre d'adresse se replie :
        sans ce filtre, la carte se recadre en plein geste et le tracé paraît bouger */
     if (!force && (w === lastW && h === lastH)) return;
-    if (!force && Date.now() < gestureUntil) return;
+    if (!force && inGesture()) return;
     lastW = w; lastH = h;
     if (map.invalidateSize) map.invalidateSize({ pan: false });
   }
@@ -759,15 +828,9 @@
     if (state.phase === 'routes') setTimeout(ensurePinVisible, 60);
   }
   window.addEventListener('resize', function () {
-    if (Date.now() < gestureUntil) return;
+    if (inGesture()) return;
     sizeMap();
-    setTimeout(function () { if (Date.now() >= gestureUntil) setSheetHeight(); }, 150);
-  });
-  ['movestart', 'zoomstart', 'rotatestart', 'dragstart'].forEach(function (ev) {
-    map.on(ev, function () { gestureUntil = Date.now() + 500; });
-  });
-  ['moveend', 'zoomend', 'rotateend', 'dragend'].forEach(function (ev) {
-    map.on(ev, function () { setTimeout(function () { gestureUntil = 0; }, 220); });
+    setTimeout(function () { if (!inGesture()) setSheetHeight(); }, 150);
   });
 
   var ICONS = {
@@ -1089,7 +1152,8 @@
       if (i === state.sel) return;
       altLayers.push(L.polyline(r.pts, {
         color: '#98a2b3', weight: Math.max(3, routeWeight(map.getZoom()) - 2), opacity: .85,
-        lineCap: 'round', lineJoin: 'round', smoothFactor: 0.3, interactive: false
+        lineCap: 'round', lineJoin: 'round', smoothFactor: 0.3, interactive: false,
+        renderer: routeRenderer
       }).addTo(map));
     });
     var sel = state.routes[state.sel];
@@ -1098,11 +1162,11 @@
        tracé suive fidèlement les points de Valhalla au lieu de couper les virages. */
     casingLayer = L.polyline(sel.pts, {
       color: '#ffffff', weight: w + 3, opacity: 1, lineCap: 'round', lineJoin: 'round',
-      smoothFactor: 0.3, interactive: false
+      smoothFactor: 0.3, interactive: false, renderer: routeRenderer
     }).addTo(map);
     routeLayer = L.polyline(sel.pts, {
       color: '#2f6bff', weight: w, opacity: 1, lineCap: 'round', lineJoin: 'round',
-      smoothFactor: 0.3, interactive: false
+      smoothFactor: 0.3, interactive: false, renderer: routeRenderer
     }).addTo(map);
     drawArrows(sel);
   }
@@ -1148,7 +1212,7 @@
      si l'épingle d'arrivée est sortie de la zone visible */
   function ensurePinVisible() {
     if (!state.dest) return;
-    if (Date.now() < gestureUntil) return;   /* jamais pendant un geste */
+    if (inGesture()) return;   /* jamais pendant un geste */
     var r = screenRect();
     var pin = map.latLngToContainerPoint([state.dest.lat, state.dest.lon]);
     var cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
@@ -1429,7 +1493,7 @@
     while (i < cum.length - 1 && cum[i] < done) i++;
     return [pointAt(pts, cum, Math.min(done, route.length))].concat(pts.slice(i));
   }
-  var lastTrim = 0;
+  var lastTrim = 0, lastTrimAt = -1;
 
   function setCar(p, deg) {
     if (!carMarker) {
@@ -1486,9 +1550,14 @@
 
     if (state.route && state.navigating) {
       var p = live ? [state.fix.lat, state.fix.lon] : pointAt(state.route.pts, state.route.cum, state.traveled);
-      /* on ne garde en bleu que le trajet restant (4 fois par seconde, pas à chaque image) */
-      if (Date.now() - lastTrim > 250) {
+      /* On ne garde en bleu que le trajet restant. Recalcul uniquement quand la voiture a
+         réellement avancé, et JAMAIS pendant un geste : reconstruire le tracé pendant qu'on
+         déplace la carte réécrit tout le chemin plusieurs fois par seconde et fait
+         « trembler » la ligne. */
+      if (!inGesture() && Date.now() - lastTrim > 400 &&
+          Math.abs(state.traveled - lastTrimAt) > 6) {
         lastTrim = Date.now();
+        lastTrimAt = state.traveled;
         var rest = trimRoute(state.route, state.traveled);
         if (routeLayer) routeLayer.setLatLngs(rest);
         if (casingLayer) casingLayer.setLatLngs(rest);
@@ -1579,8 +1648,8 @@
         state.lastStep = -1;
         if (routeLayer) map.removeLayer(routeLayer);
         if (casingLayer) map.removeLayer(casingLayer);
-        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round' }).addTo(map);
-        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round' }).addTo(map);
+        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round', renderer: routeRenderer }).addTo(map);
+        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round', renderer: routeRenderer }).addTo(map);
         state.following = true;
         state.offCount = 0;
         banner('Nouvel itinéraire calculé. Arrivée à ' + clock(Date.now() + nr.time * 1000) + '.', 7000);
@@ -1624,8 +1693,8 @@
         state.lastStep = -1;
         if (routeLayer) map.removeLayer(routeLayer);
         if (casingLayer) map.removeLayer(casingLayer);
-        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round' }).addTo(map);
-        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round' }).addTo(map);
+        casingLayer = L.polyline(nr.pts, { color: '#fff', weight: 13, opacity: .95, lineCap: 'round', renderer: routeRenderer }).addTo(map);
+        routeLayer = L.polyline(nr.pts, { color: '#2f6bff', weight: 8, lineCap: 'round', renderer: routeRenderer }).addTo(map);
         state.following = true;
         map.setView(from, 16, { animate: false });
         banner((kind === 'street' ? 'Nouvel itinéraire' : 'Bouchon évité') + ' : ' +
