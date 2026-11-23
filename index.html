@@ -14,8 +14,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css">
 <style>
   :root{
     --text:#101828;--muted:#667085;--line:rgba(16,24,40,.10);--sheet:#fff;
@@ -427,11 +426,340 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
 <script>
-(function () {
+/* message clair si le moteur cartographique ne peut pas démarrer */
+window.__sos = setTimeout(function () {
+  var b = document.getElementById('boot');
+  if (b) b.hidden = false;
+}, 9000);
+</script>
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<script>if (window.__sos) clearTimeout(window.__sos);</script>
+<script>/* =============================================================================
+   COUCHE D'ADAPTATION : l'application garde ses appels d'origine (L.map,
+   L.polyline, L.marker, map.setView, map.fitBounds…), mais tout est rendu par
+   MapLibre GL sur une carte vectorielle. Fond et tracé sont alors dessinés dans
+   la même scène graphique : ils ne peuvent plus se désolidariser pendant un
+   pincement.
+   ========================================================================== */
+var L = (function () {
+  var seq = 0;
+
+  function toLL(p) {
+    if (Array.isArray(p)) return [p[1], p[0]];
+    return [p.lng, p.lat];
+  }
+  function llOf(p) {
+    if (Array.isArray(p)) return { lat: p[0], lng: p[1] };
+    return p;
+  }
+  function geo(pts) {
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: (pts || []).map(function (p) {
+          return Array.isArray(p) ? [p[1], p[0]] : [p.lng, p.lat];
+        })
+      }
+    };
+  }
+
+  /* ---------- style « GPS » : contraste net, sans agresser ---------- */
+  function palette(mb) {
+    function set(id, prop, val) { if (mb.getLayer(id)) mb.setPaintProperty(id, prop, val); }
+    function setL(id, prop, val) { if (mb.getLayer(id)) mb.setLayoutProperty(id, prop, val); }
+    set('background', 'background-color', '#eaedf1');
+    set('park', 'fill-color', '#cfe7bd');
+    set('landcover_wood', 'fill-color', '#c5dfb2');
+    set('landcover_grass', 'fill-color', '#d3e8c2');
+    set('landuse_residential', 'fill-color', '#eceef2');
+    set('water', 'fill-color', '#c6dcf1');
+    set('waterway', 'line-color', '#c6dcf1');
+    set('building', 'fill-color', '#dcdfe5');
+    set('building', 'fill-outline-color', '#c9cdd6');
+    set('highway_minor', 'line-color', '#ffffff');
+    set('highway_major_casing', 'line-color', '#c0c5ce');
+    set('highway_major_inner', 'line-color', '#ffffff');
+    set('highway_motorway_casing', 'line-color', '#b0b6c0');
+    set('highway_motorway_inner', 'line-color', '#d5dae1');
+    set('highway_motorway_subtle', 'line-color', '#d5dae1');
+    set('railway', 'line-color', '#cbd0d7');
+    set('railway_dashline', 'line-color', '#ffffff');
+    set('boundary_3', 'line-color', '#c6cad2');
+
+    var frName = ['coalesce', ['get', 'name:fr'], ['get', 'name']];
+    ['label_city', 'label_city_capital', 'label_town', 'label_village', 'label_other',
+     'label_state', 'label_country', 'label_country_2', 'label_country_3',
+     'water_name_point_label', 'water_name_line_label',
+     'highway-name-major', 'highway-name-minor', 'highway-name-path'].forEach(function (id) {
+      if (!mb.getLayer(id)) return;
+      mb.setPaintProperty(id, 'text-color', '#39414a');
+      mb.setPaintProperty(id, 'text-halo-color', '#ffffff');
+      mb.setPaintProperty(id, 'text-halo-width', 1.6);
+      mb.setLayoutProperty(id, 'text-field', frName);
+    });
+    /* moins de pictogrammes : la carte reste lisible sous le tracé */
+    ['poi_z16', 'poi_z15', 'poi_z14', 'poi-transit', 'airport'].forEach(function (id) {
+      if (mb.getLayer(id)) mb.setLayoutProperty(id, 'visibility', 'none');
+    });
+    setL('label_city', 'text-size', 14);
+    setL('label_town', 'text-size', 12.5);
+    setL('label_village', 'text-size', 11.5);
+    /* les noms de pays sont énormes dans ce style : on les calme */
+    ['label_country', 'label_country_2', 'label_country_3'].forEach(function (id) {
+      if (mb.getLayer(id)) {
+        mb.setLayoutProperty(id, 'text-size', 13);
+        mb.setPaintProperty(id, 'text-color', '#6b7280');
+        mb.setPaintProperty(id, 'text-halo-width', 1.2);
+      }
+    });
+  }
+
+  /* ------------------------------- carte ------------------------------- */
+  function MBMap(id, opts) {
+    opts = opts || {};
+    var self = this;
+    this._layers = {};
+    this._pending = [];
+    this._ready = false;
+    this._ev = {};
+
+    this.mb = new maplibregl.Map({
+      container: id,
+      style: 'https://tiles.openfreemap.org/styles/positron',
+      center: toLL(opts.center || [46.6, 2.4]),
+      zoom: opts.zoom || 5,
+      minZoom: opts.minZoom || 4,
+      maxZoom: 18.5,
+      attributionControl: true,
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false
+    });
+    this.mb.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    this.mb.addControl(new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }), 'bottom-left');
+
+    this.mb.on('load', function () {
+      self._ready = true;
+      try { palette(self.mb); } catch (e) {}
+      self._pending.splice(0).forEach(function (l) { l._install(self.mb); });
+      self._fire('load');
+    });
+
+    ['zoom', 'zoomend', 'moveend', 'move', 'rotate', 'rotateend', 'dragstart', 'idle']
+      .forEach(function (ev) {
+        self.mb.on(ev, function () { self._fire(ev); });
+      });
+    this.mb.on('click', function (e) {
+      self._fire('click', { latlng: { lat: e.lngLat.lat, lng: e.lngLat.lng } });
+    });
+  }
+
+  MBMap.prototype._fire = function (ev, data) {
+    (this._ev[ev] || []).forEach(function (f) { try { f(data); } catch (e) {} });
+  };
+  MBMap.prototype.on = function (ev, fn) {
+    (this._ev[ev] = this._ev[ev] || []).push(fn);
+    return this;
+  };
+  MBMap.prototype.off = function (ev, fn) {
+    if (!fn) { this._ev[ev] = []; return this; }
+    this._ev[ev] = (this._ev[ev] || []).filter(function (f) { return f !== fn; });
+    return this;
+  };
+
+  MBMap.prototype.setView = function (ll, z, o) {
+    var p = llOf(ll);
+    this.mb.jumpTo({ center: [p.lng, p.lat], zoom: z === undefined ? this.mb.getZoom() : z });
+    return this;
+  };
+  MBMap.prototype.panTo = function (ll) { var p = llOf(ll); this.mb.panTo([p.lng, p.lat]); return this; };
+  MBMap.prototype.panBy = function (d, o) {
+    this.mb.panBy([d[0], d[1]], { animate: !!(o && o.animate) });
+    return this;
+  };
+  MBMap.prototype.getCenter = function () { var c = this.mb.getCenter(); return { lat: c.lat, lng: c.lng }; };
+  MBMap.prototype.getZoom = function () { return this.mb.getZoom(); };
+  MBMap.prototype.getSize = function () {
+    var c = this.mb.getContainer();
+    return { x: c.clientWidth, y: c.clientHeight };
+  };
+  MBMap.prototype.project = function (ll) {
+    var p = llOf(ll), q = this.mb.project([p.lng, p.lat]);
+    return { x: q.x, y: q.y };
+  };
+  MBMap.prototype.latLngToContainerPoint = function (ll) { return this.project(ll); };
+  MBMap.prototype.unproject = function (pt) {
+    var q = this.mb.unproject([pt.x, pt.y]);
+    return { lat: q.lat, lng: q.lng };
+  };
+  MBMap.prototype.fitBounds = function (b, opts) {
+    opts = opts || {};
+    var w, s, e, n;
+    if (b && typeof b.getWest === 'function') {
+      w = b.getWest(); s = b.getSouth(); e = b.getEast(); n = b.getNorth();
+    } else {
+      var p1 = llOf(b[0]), p2 = llOf(b[1]);
+      w = Math.min(p1.lng, p2.lng); e = Math.max(p1.lng, p2.lng);
+      s = Math.min(p1.lat, p2.lat); n = Math.max(p1.lat, p2.lat);
+    }
+    var tl = opts.paddingTopLeft || [0, 0], br = opts.paddingBottomRight || [0, 0];
+    this.mb.fitBounds([[w, s], [e, n]], {
+      padding: { top: tl[1], left: tl[0], bottom: br[1], right: br[0] },
+      maxZoom: opts.maxZoom || 16,
+      animate: !!opts.animate,
+      duration: opts.animate ? 450 : 0
+    });
+    return this;
+  };
+  MBMap.prototype.getContainer = function () { return this.mb.getContainer(); };
+  MBMap.prototype.invalidateSize = function () { this.mb.resize(); return this; };
+  MBMap.prototype.setBearing = function (deg, o) {
+    this.mb.easeTo({ bearing: deg, duration: (o && o.animate === false) ? 0 : 300 });
+    return this;
+  };
+  MBMap.prototype.getBearing = function () { return this.mb.getBearing(); };
+
+  MBMap.prototype.addLayer = function (l) {
+    this._layers[l._id] = l;
+    l._map = this;
+    if (this._ready) l._install(this.mb); else this._pending.push(l);
+    return this;
+  };
+  MBMap.prototype.hasLayer = function (l) { return !!(l && this._layers[l._id]); };
+  MBMap.prototype.removeLayer = function (l) {
+    if (!l) return this;
+    delete this._layers[l._id];
+    if (l._remove) l._remove(this.mb);
+    return this;
+  };
+
+  /* ------------------------------ tracé ------------------------------- */
+  function Polyline(pts, opts) {
+    this._id = 'pl' + (++seq);
+    this._src = 'src' + this._id;
+    this.pts = (pts || []).slice();
+    this.opts = opts || {};
+    this._added = false;
+  }
+  Polyline.prototype.addTo = function (m) { m.addLayer(this); return this; };
+  Polyline.prototype._install = function (mb) {
+    if (this._added) return;
+    var o = this.opts;
+    mb.addSource(this._src, { type: 'geojson', data: geo(this.pts) });
+    var paint = {
+      'line-color': o.color || '#2f6bff',
+      'line-width': o.weight || 5,
+      'line-opacity': o.opacity === undefined ? 1 : o.opacity
+    };
+    if (o.dashArray) {
+      var d = String(o.dashArray).split(/[ ,]+/).map(Number).filter(function (n) { return n > 0; });
+      if (d.length >= 2) paint['line-dasharray'] = d;
+    }
+    mb.addLayer({
+      id: this._id, type: 'line', source: this._src,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: paint
+    });
+    this._added = true;
+  };
+  Polyline.prototype._remove = function (mb) {
+    if (!this._added) return;
+    try { if (mb.getLayer(this._id)) mb.removeLayer(this._id); } catch (e) {}
+    try { if (mb.getSource(this._src)) mb.removeSource(this._src); } catch (e) {}
+    this._added = false;
+  };
+  Polyline.prototype.setLatLngs = function (pts) {
+    this.pts = (pts || []).slice();
+    if (this._added && this._map) this._map.mb.getSource(this._src).setData(geo(this.pts));
+    return this;
+  };
+  Polyline.prototype.setStyle = function (o) {
+    this.opts = Object.assign({}, this.opts, o || {});
+    if (this._added && this._map) {
+      var mb = this._map.mb, o2 = this.opts;
+      try {
+        if (o2.color) mb.setPaintProperty(this._id, 'line-color', o2.color);
+        if (o2.weight) mb.setPaintProperty(this._id, 'line-width', o2.weight);
+        if (o2.opacity !== undefined) mb.setPaintProperty(this._id, 'line-opacity', o2.opacity);
+      } catch (e) {}
+    }
+    return this;
+  };
+  Polyline.prototype.redraw = function () { return this; };
+  Polyline.prototype.bringToFront = function () {
+    try { if (this._map && this._map.mb.getLayer(this._id)) this._map.mb.moveLayer(this._id); } catch (e) {}
+    return this;
+  };
+  Polyline.prototype.getBounds = function () {
+    var s = 90, n = -90, w = 180, e = -180;
+    this.pts.forEach(function (p) {
+      var q = llOf(p);
+      s = Math.min(s, q.lat); n = Math.max(n, q.lat);
+      w = Math.min(w, q.lng); e = Math.max(e, q.lng);
+    });
+    return {
+      getSouth: function () { return s; }, getNorth: function () { return n; },
+      getWest: function () { return w; }, getEast: function () { return e; }
+    };
+  };
+
+  /* ----------------------------- marqueur ----------------------------- */
+  function Marker(latlng, opts) {
+    this._id = 'mk' + (++seq);
+    this.opts = opts || {};
+    this.latlng = latlng;
+    var el = document.createElement('div');
+    el.className = 'lmark ' + ((this.opts.icon && this.opts.icon.className) || '');
+    el.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none';
+    if (this.opts.icon && this.opts.icon.iconSize) {
+      el.style.width = this.opts.icon.iconSize[0] + 'px';
+      el.style.height = this.opts.icon.iconSize[1] + 'px';
+    }
+    el.innerHTML = (this.opts.icon && this.opts.icon.html) || '';
+    this.el = el;
+    this.mk = new maplibregl.Marker({ element: el, anchor: 'center' });
+  }
+  Marker.prototype.addTo = function (m) {
+    this._map = m;
+    m._layers[this._id] = this;
+    var ll = llOf(this.latlng);
+    this.mk.setLngLat([ll.lng, ll.lat]).addTo(m.mb);
+    return this;
+  };
+  Marker.prototype.setLatLng = function (ll) {
+    this.latlng = ll;
+    var p = llOf(ll);
+    this.mk.setLngLat([p.lng, p.lat]);
+    return this;
+  };
+  Marker.prototype.getElement = function () { return this.el; };
+  Marker.prototype.setOpacity = function (o) { this.el.style.opacity = o; return this; };
+  Marker.prototype._remove = function () { try { this.mk.remove(); } catch (e) {} };
+
+  /* ------------------------- objets factices -------------------------- */
+  function noop() { return { addTo: function () { return this; }, remove: function () {}, on: function () {} }; }
+
+  return {
+    Map: MBMap,
+    map: function (id, opts) { return new MBMap(id, opts); },
+    polyline: function (pts, o) { return new Polyline(pts, o); },
+    marker: function (ll, o) { return new Marker(ll, o); },
+    divIcon: function (o) { return o; },
+    canvas: function () { return null; },
+    tileLayer: function () { return noop(); },
+    control: {
+      attribution: function () { return noop(); },
+      scale: function () { return noop(); }
+    },
+    Browser: { any3d: true },
+    DomUtil: { setTransform: function () {}, setPosition: function () {} },
+    TileLayer: { prototype: {} }
+  };
+})();
+
+  (function () {
   'use strict';
 
   var VOICE_OK = 'speechSynthesis' in window;
@@ -462,20 +790,7 @@
     recents: []
   };
 
-  var map = L.map('map', {
-    center: FRANCE, zoom: 5, zoomControl: false, attributionControl: false,
-    minZoom: 4, maxBounds: [[40.5, -6.8], [52.6, 10.8]], maxBoundsViscosity: 0.35,
-    zoomSnap: .25, zoomDelta: .5, wheelPxPerZoomLevel: 90,
-    /* Tracé en canvas (image bitmap) et non en SVG : quand la carte se déplace d'un
-       demi-pixel, un trait SVG est redessiné à chaque image et son antialiasing change —
-       c'est ce qui « tremble ». Un canevas se contente d'être déplacé, sans être redessiné.
-       L'animation de zoom reste active : pendant le zoom, tuiles et canevas sont agrandis
-       par la même transformation CSS. */
-    preferCanvas: true, zoomAnimation: true, fadeAnimation: true, markerZoomAnimation: true,
-    rotate: true, touchRotate: true, rotateControl: false, shiftKeyRotate: true
-  });
-  L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
-  L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 110 }).addTo(map);
+  var map = L.map('map', { center: FRANCE, zoom: 5, minZoom: 4 });
 
   /* Fond de carte Google en premier (rendu « Google Maps » classique, tuiles 2× pour
      rester net sur téléphone), OpenStreetMap France puis Allemagne en secours si les
@@ -489,48 +804,10 @@
     { url: 'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
       attr: '&copy; OpenStreetMap Deutschland', filter: 'saturate(.40) brightness(1.06) contrast(1.16)' }
   ];
-  var tiles = null, tAt = -1, tErr = 0;
-  function useTiles(i) {
-    if (i >= TILES.length) return;
-    if (tiles) map.removeLayer(tiles);
-    tAt = i; tErr = 0;
-    var opt = {
-      maxZoom: 19, crossOrigin: true, detectRetina: false, attribution: TILES[i].attr,
-      updateWhenIdle: false, updateWhenZooming: false, keepBuffer: 6
-    };
-    if (TILES[i].subdomains) opt.subdomains = TILES[i].subdomains;
-    if (TILES[i].big) { opt.tileSize = 512; opt.zoomOffset = -1; }   /* tuiles 2× */
-    tiles = L.tileLayer(TILES[i].url, opt).addTo(map);
-    /* chaque fournisseur a son propre rendu : on ajuste le filtre */
-    var pane = document.querySelector('.leaflet-tile-pane');
-    if (pane) pane.style.filter = TILES[i].filter || 'none';
-    tiles.on('tileerror', function () { if (++tErr >= 2) useTiles(tAt + 1); });
-  }
-  useTiles(0);
+  /* Fond de carte : tuiles vectorielles libres (OpenFreeMap), stylées par la couche
+   d'adaptation. Aucune clé, aucun compte, et un seul rendu pour la carte et le tracé. */
+  function useTiles() {}
 
-  /* ---------------------------------------------------------------------
-     Correctif « routes qui tremblent sous le tracé ».
-
-     Leaflet positionne chaque niveau de tuiles avec une translation ARRONDIE
-     à l'entier (`_setZoomTransform`), alors que le tracé est calculé au pixel
-     exact. Pendant un pincement le zoom est fractionnaire et change en
-     continu : l'arrondi bascule sans arrêt entre -0,5 et +0,5 px (mesuré), donc
-     l'image des routes saute d'un demi-pixel à chaque cran pendant que le
-     tracé reste fixe — d'où l'impression que le trait se décale, puis « revient »
-     quand le zoom se stabilise.
-     On garde la position fractionnaire : les tuiles suivent alors exactement la
-     même projection que le tracé.
-     --------------------------------------------------------------------- */
-  (function patchTileTransform() {
-    var setT = L.DomUtil.setTransform;
-    L.TileLayer.prototype._setZoomTransform = function (level, center, zoom) {
-      var scale = this._map.getZoomScale(zoom, level.zoom);
-      var translate = level.origin.multiplyBy(scale)
-        .subtract(this._map._getNewPixelOrigin(center, zoom));   /* pas de .round() */
-      if (L.Browser.any3d) setT(level.el, translate, scale);
-      else L.DomUtil.setPosition(level.el, translate);
-    };
-  })();
   /* ---------- fenêtre Google Maps (iframe, sans clé) ---------- */
   var gbtn = document.getElementById('gbtn'), gwrap = document.getElementById('gwrap'),
       gframe = document.getElementById('gframe'), glink = document.getElementById('glink');
@@ -581,7 +858,7 @@
   /* Moteur de rendu propre au tracé, SANS marge interne (padding: 0) : le tracé et les
      tuiles utilisent alors exactement le même point de référence, y compris pendant un
      pincement où la carte change de zoom en continu. */
-  var routeRenderer = L.canvas({ padding: 0, tolerance: 0.4 });
+  var routeRenderer = null;   /* le tracé est dessiné par la carte elle-même */
 
   /* épaisseur du trait adaptée au zoom : fine de loin, franche de près */
   function routeWeight(z) {
@@ -2167,5 +2444,3 @@
 </script>
 </body>
 </html>
-
-200
