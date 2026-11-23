@@ -796,6 +796,20 @@
     return v + (av.length ? ' · ' + av.join(', ') : '');
   }
 
+  /* Sur un téléphone, le réseau peut être lent : on n'attend pas indéfiniment.
+     Passé le délai, on abandonne la requête et on bascule sur le service suivant. */
+  function fetchTimeout(url, opts, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var id = setTimeout(function () { try { ctrl.abort(); } catch (e) {} reject(new Error('délai dépassé')); }, ms);
+      var o = {};
+      for (var k in (opts || {})) o[k] = opts[k];
+      o.signal = ctrl.signal;
+      fetch(url, o).then(function (r) { clearTimeout(id); resolve(r); },
+                         function (e) { clearTimeout(id); reject(e); });
+    });
+  }
+
   /* Valhalla d'abord ; si le service ne répond pas (saturation, coupure), on bascule
      automatiquement sur OSRM (autre service public gratuit, mêmes données OSM).
      L'application ne reste donc jamais sans itinéraire. */
@@ -814,9 +828,9 @@
       directions_options: { language: 'fr-FR', units: 'kilometers' }
     };
     if (extra) for (var k in extra) body[k] = extra[k];
-    return fetch('https://valhalla1.openstreetmap.de/route', {
+    return fetchTimeout('https://valhalla1.openstreetmap.de/route', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function (r) {
+    }, 8000).then(function (r) {
       if (!r.ok) throw new Error('route ' + r.status);
       return r.json();
     }).then(function (d) {
@@ -904,7 +918,7 @@
       from.lon + ',' + from.lat + ';' + to.lon + ',' + to.lat +
       '?overview=full&geometries=geojson&steps=true' +
       (excl.length ? '&exclude=' + excl.join(',') : '');
-    return fetch(url).then(function (r) {
+    return fetchTimeout(url, null, 10000).then(function (r) {
       if (!r.ok) throw new Error('osrm ' + r.status);
       return r.json();
     }).then(function (d) {
