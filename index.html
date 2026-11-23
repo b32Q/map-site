@@ -90,7 +90,7 @@
   .search:focus-within{box-shadow:0 12px 30px -12px rgba(11,18,32,.42),0 0 0 2px rgba(47,107,255,.35)}
   .search.picking{box-shadow:0 12px 30px -12px rgba(11,18,32,.42),0 0 0 2px rgba(247,144,9,.55)}
   .search .x{width:30px;height:30px;border-radius:50%;background:var(--chip);display:none;place-items:center;color:#475467;flex:none}
-  .search .gear{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;color:#344054;flex:none;background:var(--chip)}
+  .search .gear{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:#344054;flex:none;background:var(--chip)}
   .search .gear svg{width:18px;height:18px}
   .search .gear:hover{background:#e6e9ee}
   .search.filled .x{display:grid}
@@ -128,7 +128,7 @@
   .sheet h2{font-size:18px;font-weight:600;margin:0 0 2px;letter-spacing:-.01em}
   .sheet .sub{font-size:12.5px;color:var(--muted);margin:0 0 4px}
 
-  .chipbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;background:#eef2f6;
+  .chipbtn{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 11px;border-radius:999px;background:#eef2f6;
     font-size:11.5px;font-weight:500;color:#344054;margin:7px 0 2px}
   .chipbtn svg{width:13px;height:13px}
   .planline{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#8a4b00;background:#fff5e8;
@@ -254,7 +254,7 @@
   .ovl.on .ovl-card{transform:translateY(0)}
   .ovl-head{display:flex;align-items:center;justify-content:space-between}
   .ovl-head h3{font-size:16px;font-weight:600;margin:0}
-  .ovl .x{width:32px;height:32px;border-radius:50%;background:var(--chip);display:grid;place-items:center;color:#475467}
+  .ovl .x{width:40px;height:40px;border-radius:50%;background:var(--chip);display:grid;place-items:center;color:#475467}
   .sec-title{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin:14px 0 2px;font-weight:600}
   .seg{display:flex;gap:6px;background:var(--chip);padding:4px;border-radius:12px;margin-top:6px}
   .seg button{flex:1;height:36px;border-radius:9px;font-size:13px;font-weight:500;color:#475467;display:flex;align-items:center;justify-content:center;gap:6px}
@@ -273,6 +273,31 @@
   .planinput{height:34px;padding:0 10px;border-radius:9px;background:var(--chip);font-size:12.5px;max-width:170px}
 
   @media (prefers-reduced-motion:reduce){*{animation:none;transition:none}}
+
+  /* --- contrôles MapLibre : intégrés à l'interface de l'application --- */
+  .maplibregl-ctrl-bottom-left{
+    bottom: calc(var(--sheet-h, 220px) + 6px);
+    transition: bottom .3s cubic-bezier(.22,.68,.24,1);
+  }
+  .maplibregl-ctrl-bottom-left .maplibregl-ctrl{margin:0 0 5px 10px}
+  .maplibregl-ctrl-attrib{font-size:9.5px;border-radius:4px}
+  .maplibregl-ctrl-attrib.maplibregl-compact{min-height:18px}
+  .maplibregl-ctrl-scale{font-size:9.5px;border-color:rgba(60,70,85,.45);color:#475467;background:rgba(255,255,255,.6)}
+  /* le zoom +/- fait doublon avec nos boutons et ses cibles sont trop petites */
+  @media (max-width: 760px){
+    .maplibregl-ctrl-top-right{display:none}
+    .maplibregl-ctrl-scale{display:none}
+  }
+
+  /* --- zones de toucher confortables (44 px recommandés sur mobile) --- */
+  .grip{padding:16px 56px 12px;min-height:44px}
+  .fav-del{width:40px;height:40px}
+  .fav-main{min-height:44px}
+  .sw{width:52px;height:34px}
+  .sw::after{width:26px;height:26px;top:4px;left:4px}
+  .sw[aria-pressed="true"]::after{transform:translateX(18px)}
+  #clear-recents{min-height:40px;padding:6px 2px}
+  #voice-test{min-height:40px}
 </style>
 </head>
 <body>
@@ -302,13 +327,7 @@
     </div>
 
     <div class="fab-col" id="fabcol">
-      <button class="fab" id="compass" type="button" aria-label="Orientation de la carte">
-        <svg id="compass-needle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3.5l3.2 8.2H8.8L12 3.5z" fill="currentColor" stroke="none"/>
-          <path d="M12 20.5l-3.2-8.2h6.4L12 20.5z" opacity=".28" fill="currentColor" stroke="none"/>
-          <circle cx="12" cy="12" r="9.2"/>
-        </svg>
-      </button>
+
       <button class="fab" id="recenter" type="button" aria-label="Recentrer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
       </button>
@@ -1240,11 +1259,17 @@ var L = (function () {
       var n = norm(name);
       var score = 0;
       if (n === q) score += 100;
-      else if (n.indexOf(q) === 0) score += 60;
+      else if (n.indexOf(q) === 0) score += 90;
       else if (n.indexOf(q) > -1) score += 35;
-      if (CITY_TYPES.indexOf(p.type) > -1) score += 55;
+      if (CITY_TYPES.indexOf(p.type) > -1) {
+        score += 55;
+        if (n.indexOf(q) === 0) score += 110;   /* « bonifacio » = la commune, pas la rue */
+      }
       if (p.class === 'place' || p.class === 'boundary') score += 20;
       if (p.type === 'house' || p.type === 'railway' || p.class === 'railway') score += 5;
+      /* l'importance du lieu (Nominatim) : une ville passe devant un hameau homonyme */
+      score += Math.min(120, (p.importance || 0) * 150);
+      if (p.place_rank) score += Math.max(0, 22 - p.place_rank) * 5;
       if (state.pos) {
         var d = haversine([state.pos.lat, state.pos.lon], [parseFloat(p.lat), parseFloat(p.lon)]);
         score += Math.max(0, 40 - Math.min(40, d / 1000));
@@ -1254,30 +1279,157 @@ var L = (function () {
         sub: parts.slice(1, 3).join(',').trim(),
         lat: parseFloat(p.lat),
         lon: parseFloat(p.lon),
+        kind: p.type,
+        cls: p.class,
         score: score
       };
     }).sort(function (a, b) { return b.score - a.score; }).slice(0, 6);
   }
 
-  function searchPlaces(term) {
-    var seq = ++searchSeq;
+  /* ---------- adresses de France : la BAN (Base Adresse Nationale) ----------
+     Registre officiel (api-adresse.data.gouv.fr) : gratuit, sans clé, mis à jour
+     chaque mois. Il connaît le numéro de rue, y compris dans les rues récentes.
+     Nominatim reste interrogé en parallèle pour les villes et les lieux nommés
+     (« Marseille », « Gare de Lyon »), que la BAN ne référence pas. */
+  function typedNumber(term) {
+    var m = String(term).match(/(?:^|\s)(\d{1,4})\s*(bis|ter|quater)?(?:\s|$)/i);
+    return m ? m[1] + (m[2] ? ' ' + m[2].toLowerCase() : '') : null;
+  }
+  function banPlaces(term) {
+    var url = 'https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(term) +
+      '&limit=6&autocomplete=1';
+    return fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      var want = typedNumber(term);
+      var list = (d.features || []).map(function (f) {
+        var pr = f.properties, c = f.geometry.coordinates;
+        var street = pr.street || pr.name || '';
+        var isNum = pr.type === 'housenumber';
+        var exact = isNum && (!want || norm(String(pr.housenumber)) === norm(want));
+        var nm;
+        if (isNum) nm = pr.housenumber + ' ' + street;
+        else if (pr.type === 'street') nm = street;
+        else if (pr.type === 'municipality') nm = pr.city || pr.name;
+        else nm = pr.name;
+        /* certains résultats n'ont que le code postal comme nom : on prend la commune */
+        if (!nm || /^\d{5}$/.test(String(nm).trim())) {
+          nm = pr.city || (pr.context || '').split(',')[0] || nm;
+        }
+        return {
+          name: nm,
+          city: pr.city || '',
+          cp: pr.postcode || '',
+          sub: [pr.postcode, pr.city].filter(Boolean).join(' '),
+          lat: c[1], lon: c[0],
+          kind: pr.type,
+          exact: exact,
+          /* le numéro demandé passe devant ; une rue seule reste proposée mais après */
+          score: (exact ? 200 : isNum ? 120 : pr.type === 'street' ? 90 : 50) + (pr.score || 0)
+        };
+      });
+      /* code postal dans la requête : la commune d'abord, puis ses rues */
+      if (/\b\d{5}\b/.test(String(term)) && !want && list.length) {
+        var p0 = list[0];
+        list.unshift({ name: p0.city || p0.name, cp: p0.cp, lat: p0.lat, lon: p0.lon,
+                       sub: p0.cp || '', kind: 'municipality', score: 999 });
+      }
+      return list;
+    }).catch(function () { return []; });
+  }
+  /* une requête = BAN + Nominatim, en parallèle */
+  function fetchBoth(term) {
     var vb = state.pos
       ? [state.pos.lon - .4, state.pos.lat - .3, state.pos.lon + .4, state.pos.lat + .3].join(',')
-      : '5.60,43.00,6.30,43.35';
+      : '-5.5,41.2,9.8,51.3';
     var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1&accept-language=fr&countrycodes=fr' +
       '&viewbox=' + vb + '&bounded=0&q=' + encodeURIComponent(term);
-    return fetch(url).then(function (r) { return r.json(); }).then(function (list) {
+    return Promise.all([
+      banPlaces(term),
+      fetch(url).then(function (r) { return r.json(); }).catch(function () { return []; })
+    ]);
+  }
+
+  /* orthographes probables d'un mot avec une lettre doublée en trop
+     (« marsseille » → « marseille ») : on ne touche qu'à une seule série à la fois */
+  function typoVariants(term) {
+    var t = String(term), out = [], seen = {}, re = /(.)\1+/g, m;
+    while ((m = re.exec(t)) && out.length < 2) {
+      var run = { i: m.index, len: m[0].length };
+      var v = t.slice(0, run.i) + t.slice(run.i, run.i + 1) + t.slice(run.i + run.len);
+      if (v !== t && !seen[v]) { seen[v] = 1; out.push(v); }
+    }
+    return out;
+  }
+
+  function searchPlaces(term) {
+    var seq = ++searchSeq;
+    var wantNum = !!typedNumber(term) || /\b\d{5}\b/.test(String(term));
+    var variants = typoVariants(term);
+    var jobs = [fetchBoth(term)].concat(variants.map(function (v) { return fetchBoth(v); }));
+
+    return Promise.all(jobs).then(function (all) {
       if (seq !== searchSeq) return null;
-      return rankPlaces(list || [], term);
+      function pack(res, factor, q) {
+        var ban = (res[0] || []).map(function (p) { p.score = (p.score || 0) * factor; return p; });
+        var places = rankPlaces(res[1] || [], q).map(function (p) { p.score = (p.score || 0) * factor; return p; });
+        return { ban: ban, places: places };
+      }
+      var main = pack(all[0], 1, term);
+      var others = variants.map(function (v, k) {
+        var packed = pack(all[k + 1], 0.85, v);
+        /* la requête corrigée qui désigne une commune passe devant les rues homonymes */
+        [packed.ban, packed.places].forEach(function (list) {
+          list.forEach(function (p) {
+            var estCommune = CITY_TYPES.indexOf(p.kind) > -1 || p.cls === 'boundary';
+            if (estCommune && norm(p.name).indexOf(norm(v)) === 0) p.score = (p.score || 0) + 260;
+          });
+        });
+        return packed;
+      });
+
+      var ban = main.ban.concat.apply(main.ban, others.map(function (o) { return o.ban; }));
+      var places = main.places.concat.apply(main.places, others.map(function (o) { return o.places; }));
+      ban.sort(function (a, b) { return b.score - a.score; });
+      places.sort(function (a, b) { return b.score - a.score; });
+      ban = ban.slice(0, 4);
+
+      /* un code postal dans la requête tranche entre les homonymes */
+      var cp = (String(term).match(/\b(\d{5})\b/) || [])[1] || null;
+      if (cp) {
+        var cpSeul = String(term).trim() === cp;
+        [ban, places].forEach(function (list) {
+          list.forEach(function (p) {
+            if (p.sub && norm(p.sub).indexOf(cp) > -1) p.score = (p.score || 0) + 400;
+            if (cpSeul && (p.kind === 'municipality' || p.kind === 'locality' ||
+                           (p.kind !== 'housenumber' && p.kind !== 'street' && !p.sub))) {
+              p.score = (p.score || 0) + 500;
+            }
+          });
+        });
+        ban.sort(function (a, b) { return b.score - a.score; });
+        places.sort(function (a, b) { return b.score - a.score; });
+      }
+
+      var out = [];
+      var first = wantNum ? ban : places, second = wantNum ? places : ban;
+      first.concat(second).forEach(function (p) {
+        if (!p || !isFinite(p.lat) || !isFinite(p.lon)) return;
+        var nameKey = norm(p.name) + '|' + norm(p.sub);
+        var dup = out.some(function (q) {
+          return (norm(q.name) + '|' + norm(q.sub)) === nameKey ||
+                 (Math.abs(q.lat - p.lat) < 0.0007 && Math.abs(q.lon - p.lon) < 0.0007);
+        });
+        if (!dup) out.push(p);
+      });
+      return out.slice(0, 6);
     });
   }
 
-  /* la carte occupe exactement l'écran : aucun décalage possible entre les calques */
   var mapEl = document.getElementById('map');
   var lastW = 0, lastH = 0;
   /* « l'utilisateur touche la carte en ce moment » : suivi sur les vrais événements
-     d'entrée (les événements Leaflet se mélangent aux déplacements automatiques) */
+     d'entrée (les événements de la carte se mélangent aux déplacements automatiques) */
   var gesteJusqua = 0;
+
   function inGesture() { return Date.now() < gesteJusqua; }
   function markGesture() { gesteJusqua = Date.now() + 400; }
   ['touchstart', 'touchmove', 'wheel', 'mousedown', 'mousemove', 'pointerdown', 'pointermove']
@@ -1358,6 +1510,7 @@ var L = (function () {
     document.documentElement.style.setProperty('--sheet-h', Math.round(px) + 'px');
     document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : Math.round(px) + 6) + 'px');
     fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14) + 'px';
+      try { updateRecenter(); } catch (e) {}
   }
   function setSheetMode(mode, animate) {
     sheetMode = mode;
@@ -1398,6 +1551,18 @@ var L = (function () {
 
   function reverseGeocode() {
     if (!state.pos) return;
+    /* BAN d'abord : elle donne le numéro et la voie officiels */
+    fetch('https://api-adresse.data.gouv.fr/reverse/?lon=' + state.pos.lon + '&lat=' + state.pos.lat)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var f = (d.features || [])[0];
+        if (!f || !f.properties || !f.properties.label) throw new Error('vide');
+        state.posLabel = f.properties.label.replace(/,?\s*France$/, '');
+        if (state.phase === 'home') renderHome();
+      })
+      .catch(function () { reverseNominatim(); });
+  }
+  function reverseNominatim() {
     var u = 'https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&accept-language=fr' +
       '&lat=' + state.pos.lat + '&lon=' + state.pos.lon;
     fetch(u).then(function (r) { return r.json(); }).then(function (d) {
@@ -1738,12 +1903,23 @@ var L = (function () {
     }, 450);
   });
   qInput.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      clearTimeout(searchTimer);
-      var term = qInput.value.trim();
-      if (term.length >= 3) searchPlaces(term).then(function (l) { showSuggestions(l, term); }).catch(function () {});
-    }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    clearTimeout(searchTimer);
+    /* une liste déjà affichée : on prend la première proposition */
+    var first = sugg.hidden ? null : sugg.querySelector('button');
+    if (first) { first.click(); return; }
+    var term = qInput.value.trim();
+    if (term.length < 3) return;
+    searchPlaces(term).then(function (l) {
+      if (!l || !l.length) { showSuggestions(l, term); return; }
+      var p = l[0];
+      hideSuggestions();
+      if (state.pickMode === 'from') { setDeparture(p); return; }
+      qInput.value = p.name;
+      searchBox.classList.add('filled');
+      startRoutes(p);
+    }).catch(function () {});
   });
 
   document.getElementById('clearq').addEventListener('click', function () {
@@ -1830,6 +2006,7 @@ var L = (function () {
     state.navigating = true;
     state.arrived = false;
     state.following = true;
+    try { updateRecenter(); } catch (e) {}
     state.lastStep = -1;
     state.ri = 0;
     hideBanner();
@@ -2203,32 +2380,36 @@ var L = (function () {
     });
   });
 
-  document.getElementById('compass').addEventListener('click', function () {
-    if (state.navigating) {
-      state.capUp = !state.capUp;
-      if (state.capUp) {
-        var p = pointAt(state.route.pts, state.route.cum, state.traveled);
-        var a = pointAt(state.route.pts, state.route.cum, Math.min(state.route.length, state.traveled + 25));
-        setBearing(-bearing(p, a));
-        toast('Carte orientée vers la route');
-      } else {
-        setBearing(0);
-        toast('Nord en haut');
-      }
-    } else {
-      setBearing(0);
-      toast('Nord en haut');
-    }
-  });
 
-  document.getElementById('recenter').addEventListener('click', function () {
+  /* Un seul bouton de recentrage, qui s'adapte à la situation :
+     guidage en cours → sur le véhicule ; itinéraire affiché → sur tout le trajet ;
+     sinon → sur la position. */
+  var recenterBtn = document.getElementById('recenter');
+  function updateRecenter() {
+    var b = document.getElementById('recenter');
+    if (!b) return;
+    recenterBtn = b;
+    var label = (state.route && state.navigating) ? 'Recentrer sur le véhicule'
+      : state.routes.length ? 'Recentrer sur l’itinéraire'
+      : 'Recentrer sur ma position';
+    recenterBtn.setAttribute('aria-label', label);
+    recenterBtn.setAttribute('title', label);
+  }
+  recenterBtn.addEventListener('click', function () {
     state.following = true;
     if (state.route && state.navigating) {
-      map.setView(pointAt(state.route.pts, state.route.cum, state.traveled), 16, { animate: false });
+      map.setView(pointAt(state.route.pts, state.route.cum, state.traveled), 16, { animate: true });
       toast('Caméra sur le véhicule');
-    } else if (state.routes.length) { fitToRoute(); toast('Vue sur l’itinéraire'); }
-    else { map.setView(state.pos ? [state.pos.lat, state.pos.lon] : FRANCE, state.pos ? 15 : 5, { animate: false }); }
+    } else if (state.routes.length) {
+      fitToRoute();
+      toast('Vue sur l’itinéraire');
+    } else {
+      map.setView(state.pos ? [state.pos.lat, state.pos.lon] : FRANCE, state.pos ? 15 : 5, { animate: true });
+      toast(state.pos ? 'Recentré sur ta position' : 'Vue sur la France');
+    }
+    updateRecenter();
   });
+  updateRecenter();
 
   document.getElementById('gear').addEventListener('click', openOpts);
 
