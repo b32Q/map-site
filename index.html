@@ -1705,6 +1705,11 @@ var L = (function () {
       var parts = (p.display_name || '').split(',');
       var name = (p.name || parts[0] || '').trim();
       var n = norm(name);
+      var ad0 = p.address || {};
+      var cpTxt = ad0.postcode || p.postcode || '';
+      var villeTxt = ad0.city || ad0.town || ad0.village || ad0.municipality || p.city || '';
+      var subTxt = [cpTxt, villeTxt || name].filter(Boolean).join(' ').trim() ||
+                   parts.slice(1, 3).join(',').trim();
       var score = 0;
       if (n === q) score += 100;
       else if (n.indexOf(q) === 0) score += 90;
@@ -1714,17 +1719,26 @@ var L = (function () {
         if (n.indexOf(q) === 0) score += 110;   /* « bonifacio » = la commune, pas la rue */
       }
       if (p.class === 'place' || p.class === 'boundary') score += 20;
+      /* plages, monuments, sites : « plage de palombaggia » doit sortir devant une rue homonyme */
+      if (['natural', 'tourism', 'historic', 'leisure'].indexOf(p.class) > -1) score += 35;
+      /* le lieu qui porte le nom de sa commune passe devant une attraction homonyme */
+      if (n && norm(subTxt).indexOf(n) > -1) score += 45;
       if (p.type === 'house' || p.type === 'railway' || p.class === 'railway') score += 5;
       /* l'importance du lieu (Nominatim) : une ville passe devant un hameau homonyme */
       score += Math.min(120, (p.importance || 0) * 150);
+      /* un nom plus long que la demande est moins précis : « Baie du Mont Saint-Michel »
+         ne doit pas passer devant « Mont Saint-Michel » */
+      var qt = norm(term).split(/[^a-z0-9]+/).filter(Boolean).length;
+      var nt = n.split(/[^a-z0-9]+/).filter(Boolean).length;
+      if (nt > qt) score -= 15 * (nt - qt);
       if (p.place_rank) score += Math.max(0, 22 - p.place_rank) * 5;
       if (state.pos) {
         var d = haversine([state.pos.lat, state.pos.lon], [parseFloat(p.lat), parseFloat(p.lon)]);
-        score += Math.max(0, 40 - Math.min(40, d / 1000));
+        score += Math.max(0, 22 - Math.min(22, d / 2000));
       }
       return {
         name: name,
-        sub: parts.slice(1, 3).join(',').trim(),
+        sub: subTxt,
         lat: parseFloat(p.lat),
         lon: parseFloat(p.lon),
         kind: p.type,
@@ -1743,6 +1757,17 @@ var L = (function () {
     var m = String(term).match(/(?:^|\s)(\d{1,4})\s*(bis|ter|quater)?(?:\s|$)/i);
     return m ? m[1] + (m[2] ? ' ' + m[2].toLowerCase() : '') : null;
   }
+  /* combien de mots du résultat on retrouve dans la requête : « rue du chat qui pêche »
+     en couvre cinq, « Paris » un seul — le plus précis gagne */
+  function tokenHits(name, term) {
+    var q = norm(term);
+    var toks = norm(name).split(/[^a-z0-9]+/).filter(function (t) { return t.length > 2; });
+    var n = 0;
+    toks.forEach(function (t) { if (q.indexOf(t) > -1) n++; });
+    return n;
+  }
+  var STREET_WORDS = /\b(rue|avenue|av|boulevard|bd|place|chemin|impasse|quai|route|all[ée]e|square|passage|traverse|mont[ée]e|cours|voie|sentier|villa|rond-point|carrefour)\b/i;
+
   function banPlaces(term) {
     var url = 'https://api-adresse.data.gouv.fr/search/?q=' + encodeURIComponent(term) +
       '&limit=6&autocomplete=1';
@@ -1769,13 +1794,17 @@ var L = (function () {
           sub: [pr.postcode, pr.city].filter(Boolean).join(' '),
           lat: c[1], lon: c[0],
           kind: pr.type,
-          exact: exact,
-          /* le numéro demandé passe devant ; une rue seule reste proposée mais après */
-          score: (exact ? 200 : isNum ? 120 : pr.type === 'street' ? 90 : 50) + (pr.score || 0)
+          /* un numéro ne compte que si la rue correspond vraiment :
+             « 12 rue de Vesle » ne doit pas donner « 12 Boulevard du Val de Vesle » */
+          exact: exact && tokenHits(nm, term) >= 2,
+          score: (exact && tokenHits(nm, term) >= 2 ? 260 : 0) +
+                 tokenHits(nm, term) * 22 +
+                 (isNum ? 30 : pr.type === 'street' ? 30 : pr.type === 'municipality' ? 60 : 10) +
+                 (pr.score || 0) * 30
         };
       });
       /* code postal dans la requête : la commune d'abord, puis ses rues */
-      if (/\b\d{5}\b/.test(String(term)) && !want && list.length) {
+      if (/\b\d{5}\b/.test(String(term)) && !want && !STREET_WORDS.test(term) && list.length) {
         var p0 = list[0];
         list.unshift({ name: p0.city || p0.name, cp: p0.cp, lat: p0.lat, lon: p0.lon,
                        sub: p0.cp || '', kind: 'municipality', score: 999 });
@@ -1784,16 +1813,133 @@ var L = (function () {
     }).catch(function () { return []; });
   }
   /* une requête = BAN + Nominatim, en parallèle */
-  function fetchBoth(term) {
+  /* Communes officielles (geo.api.gouv.fr) : sans clé, sans limite de débit, avec la
+     population. Sert à trancher « chamonix » (la ville) contre « rue de Chamonix ». */
+  function communesPlaces(term) {
+    if (/\d/.test(term)) return Promise.resolve([]);      /* une adresse : la BAN suffit */
+    var base = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(term) +
+      '&fields=nom,centre,codesPostaux,population&limit=8';
+    /* deux passes : par population (grandes villes) et sans classement (petits villages) */
+    return Promise.all([
+      fetch(base + '&boost=population').then(function (r) { return r.json(); }).catch(function () { return []; }),
+      fetch(base).then(function (r) { return r.json(); }).catch(function () { return []; })
+    ]).then(function (both) {
+      var seen = {}, list = [];
+      both.forEach(function (arr) {
+        (arr || []).forEach(function (c) {
+          var k = c.nom + '|' + (c.centre && c.centre.coordinates ? c.centre.coordinates.join(',') : '');
+          if (seen[k]) return;
+          seen[k] = 1; list.push(c);
+        });
+      });
+      return list;
+    }).then(function (list) {
+      return (list || []).filter(function (c) { return c.centre && c.centre.coordinates; })
+        .map(function (c) {
+          var cp = (c.codesPostaux || [])[0] || '';
+          return {
+            name: c.nom,
+            sub: [cp, c.nom].filter(Boolean).join(' '),
+            lat: c.centre.coordinates[1], lon: c.centre.coordinates[0],
+            kind: 'municipality', cls: 'boundary',
+            pop: c.population || 0, score: 0
+          };
+        });
+    }).catch(function () { return []; });
+  }
+
+  function rankCommunes(list, q) {
+    return (list || []).map(function (c) {
+      var n = norm(c.name), score = 0;
+      if (n === q) score += 330;
+      else if (n.indexOf(q) === 0) score += 260;
+      else if (n.indexOf(q) > -1) score += 150;
+      else score += 90;
+      score += Math.min(70, (c.pop || 0) / 4000);       /* une grande ville devant un hameau */
+      c.score = score;
+      return c;
+    }).sort(function (a, b) { return b.score - a.score; }).slice(0, 4);
+  }
+
+  var npCache = {}, npLast = 0, npChain = Promise.resolve();
+  function nominatimPlaces(term) {
+    var hit = npCache[term];
+    if (hit && Date.now() - hit.t < 300000) return Promise.resolve(hit.d);
     var vb = state.pos
       ? [state.pos.lon - .4, state.pos.lat - .3, state.pos.lon + .4, state.pos.lat + .3].join(',')
       : '-5.5,41.2,9.8,51.3';
-    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1&accept-language=fr&countrycodes=fr' +
-      '&viewbox=' + vb + '&bounded=0&q=' + encodeURIComponent(term);
+    var url = 'https://nominatim.openstreetmap.org/search?format=json&limit=10&addressdetails=1' +
+      '&accept-language=fr&countrycodes=fr&viewbox=' + vb + '&bounded=0&q=' + encodeURIComponent(term);
+    function go(tries) {
+      return fetch(url).then(function (r) {
+        if (!r.ok) {
+          var err = new Error('http ' + r.status);
+          err.hard = (r.status === 403 || r.status === 429 || r.status === 511);
+          throw err;
+        }
+        return r.json();
+      }).then(function (d) {
+        npCache[term] = { t: Date.now(), d: d };
+        return d;
+      }).catch(function (e) {
+        if (e && e.hard) return [];          /* refusé : inutile d'insister */
+        if (tries > 0) {
+          return new Promise(function (res) { setTimeout(res, 1100); }).then(function () { return go(tries - 1); });
+        }
+        return [];
+      });
+    }
+    /* Nominatim tolère une requête par seconde : on met les appels en file
+       pour ne jamais se faire bloquer, même en enchaînant les recherches. */
+    var job = function () {
+      var wait = Math.max(0, 1150 - (Date.now() - npLast));
+      return new Promise(function (res) { setTimeout(res, wait); }).then(function () {
+        npLast = Date.now();
+        return go(1);
+      });
+    };
+    var mine = npChain.then(job, job);
+    npChain = mine.catch(function () {});
+    return mine;
+  }
+
+  /* Photon (komoot) : géocodeur libre, sans clé et sans limite serrée.
+     Sert de secours quand Nominatim ne répond pas (il limite à 1 requête/s). */
+  function photonPlaces(term) {
+    var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(term) + '&lang=fr&limit=8';
+    return fetch(url).then(function (r) { return r.json(); }).then(function (d) {
+      return (d.features || []).filter(function (f) {
+        var c = f.properties && f.properties.countrycode;
+        return !c || c === 'FR';
+      }).map(function (f) {
+        var p = f.properties || {}, co = f.geometry.coordinates;
+        var parts = [p.name, p.street, p.city, p.postcode].filter(Boolean);
+        return {
+          name: p.name || p.street || p.city || '',
+          display_name: parts.join(', '),
+          lat: co[1], lon: co[0],
+          type: p.osm_value || 'place',
+          class: p.osm_key === 'highway' ? 'highway' : (p.osm_key || 'place'),
+          postcode: p.postcode || '', city: p.city || '',
+          importance: 0.3
+        };
+      });
+    }).catch(function () { return []; });
+  }
+
+  function fetchBoth(term) {
+    /* les trois sources rapides d'abord ; Nominatim ne sert que si elles ne trouvent rien
+       (il limite à 1 requête par seconde et peut être lent ou bloqué). */
     return Promise.all([
       banPlaces(term),
-      fetch(url).then(function (r) { return r.json(); }).catch(function () { return []; })
-    ]);
+      communesPlaces(term),
+      photonPlaces(term)
+    ]).then(function (r) {
+      if (r[0].length + r[1].length + r[2].length) return [r[0], [], r[1], r[2]];
+      return nominatimPlaces(term).then(function (d) {
+        return [r[0], d, r[1], r[2]];
+      });
+    });
   }
 
   /* orthographes probables d'un mot avec une lettre doublée en trop
@@ -1815,10 +1961,13 @@ var L = (function () {
     var jobs = [fetchBoth(term)].concat(variants.map(function (v) { return fetchBoth(v); }));
 
     return Promise.all(jobs).then(function (all) {
-      if (seq !== searchSeq) return null;
+      /* une recherche remplacée n'est pas jetée : l'interface filtre elle-même sur le texte courant */
       function pack(res, factor, q) {
         var ban = (res[0] || []).map(function (p) { p.score = (p.score || 0) * factor; return p; });
-        var places = rankPlaces(res[1] || [], q).map(function (p) { p.score = (p.score || 0) * factor; return p; });
+        var places = rankPlaces(res[1] || [], q)
+          .concat(rankCommunes(res[2] || [], q))
+          .concat(rankPlaces(res[3] || [], q))
+          .map(function (p) { p.score = (p.score || 0) * factor; return p; });
         return { ban: ban, places: places };
       }
       var main = pack(all[0], 1, term);
@@ -2404,7 +2553,18 @@ var L = (function () {
     sugg.innerHTML = '<div class="empty">Recherche…</div>';
     sugg.hidden = false;
     searchTimer = setTimeout(function () {
-      searchPlaces(term).then(function (list) { showSuggestions(list, term); })
+      searchPlaces(term).then(function (list) {
+        if (qInput.value.trim() !== term) return;      /* l'utilisateur a continué à taper */
+        if (list.length) { showSuggestions(list, term); return; }
+        /* rien trouvé : souvent une coupure réseau d'une seconde — un second essai */
+        setTimeout(function () {
+          if (qInput.value.trim() !== term) return;
+          searchPlaces(term).then(function (again) {
+            if (qInput.value.trim() !== term) return;
+            showSuggestions(again, term);
+          }).catch(function () { showSuggestions([], term); });
+        }, 700);
+      })
         .catch(function () { sugg.innerHTML = '<div class="empty">Recherche indisponible — vérifie la connexion.</div>'; });
     }, 450);
   });
@@ -2512,7 +2672,7 @@ var L = (function () {
      une semaine sur le téléphone. Si le service ne répond pas, aucune alerte
      n'est inventée : on se tait.
      ========================================================================= */
-  var ZONE_KEY = 'nav_zones_v1', ZONE_TTL = 7 * 24 * 3600 * 1000;
+  var ZONE_KEY = 'nav_zones_v2', ZONE_TTL = 7 * 24 * 3600 * 1000;
   var zones = { list: [], ready: false, busy: false, said: {}, layers: [], markers: [], cams: null };
 
   function zoneCacheRead(key) {
@@ -2555,7 +2715,7 @@ var L = (function () {
       cells.push(cur);
       var lat = parseFloat(cells[3]), lon = parseFloat(cells[4]);
       if (!isFinite(lat) || !isFinite(lon)) continue;
-      var k = Math.round(lat * 2000) + ':' + Math.round(lon * 2000);   /* ~50 m */
+      var k = Math.round(lat * 5000) + ':' + Math.round(lon * 5000);   /* ~20 m */
       if (seen[k]) continue;
       seen[k] = 1;
       out.push([lat, lon]);
@@ -2611,16 +2771,33 @@ var L = (function () {
   function buildZones(route, cams) {
     if (!route || !cams || !cams.length) return [];
     var pts = route.pts, cum = route.cum, hits = [], i, c;
-    var step = pts.length > 3000 ? 3 : 1;              /* on échantillonne sans rater d'appareil */
+
+    /* Grille de ~2 km : on ne compare chaque appareil qu'aux points proches.
+       Aucun échantillonnage du tracé : un appareil n'est jamais « sauté ». */
+    var CELL = 0.02, grid = {};
+    for (i = 0; i < pts.length; i++) {
+      var gk = Math.floor(pts[i][0] / CELL) + ',' + Math.floor(pts[i][1] / CELL);
+      (grid[gk] || (grid[gk] = [])).push(i);
+    }
+
     for (c = 0; c < cams.length; c++) {
+      var clat = cams[c][0], clon = cams[c][1];
+      var cy = Math.floor(clat / CELL), cx = Math.floor(clon / CELL);
       var best = -1, bestD = 1e9;
-      for (i = 0; i < pts.length; i += step) {
-        var d = haversine(cams[c], pts[i]);
-        if (d < bestD) { bestD = d; best = i; }
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          var cell = grid[(cy + dy) + ',' + (cx + dx)];
+          if (!cell) continue;
+          for (var k = 0; k < cell.length; k++) {
+            var d = haversine(cams[c], pts[cell[k]]);
+            if (d < bestD) { bestD = d; best = cell[k]; }
+          }
+        }
       }
       if (best < 0 || bestD > 150) continue;           /* pas sur ce trajet */
-      hits.push({ lat: cams[c][0], lon: cams[c][1], s: cum[best], d: bestD });
+      hits.push({ lat: clat, lon: clon, s: cum[best], d: bestD });
     }
+
     /* les appareils ne sont pas triés dans le fichier : on trie par distance
        parcourue AVANT de regrouper, sinon on en perd la plupart */
     hits.sort(function (a, b) { return a.s - b.s; });
@@ -3251,7 +3428,7 @@ var L = (function () {
 
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); } };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); }, startRoutes: startRoutes, allCams: allCameras, buildZones: buildZones, search: searchPlaces, src: { ban: banPlaces, nomi: nominatimPlaces, photon: photonPlaces, rank: rankPlaces } };
   }
   requestAnimationFrame(loop);
 
