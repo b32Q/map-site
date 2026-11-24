@@ -1016,7 +1016,8 @@ var L = (function () {
   };
   MBMap.prototype.invalidateSize = function () { this.mb.resize(); return this; };
   MBMap.prototype.setBearing = function (deg, o) {
-    this.mb.easeTo({ bearing: deg, duration: (o && o.animate === false) ? 0 : 300 });
+    if (o && o.animate === false) this.mb.jumpTo({ bearing: deg, pitch: this.mb.getPitch() });
+    else this.mb.easeTo({ bearing: deg, duration: 300 });
     return this;
   };
   MBMap.prototype.getBearing = function () { return this.mb.getBearing(); };
@@ -3438,6 +3439,10 @@ var L = (function () {
     recenterBtn.setAttribute('aria-label', label);
     recenterBtn.setAttribute('title', label);
   }
+  function resetNorth() {
+    try { if (typeof map.setBearing === 'function') map.setBearing(0, { animate: false }); } catch (e) {}
+    try { if (map.mb && typeof map.mb.getPitch === 'function') map.mb.jumpTo({ pitch: 0 }); } catch (e) {}
+  }
   recenterBtn.addEventListener('click', function () {
     state.following = true;
     if (state.route && state.navigating) {
@@ -3450,9 +3455,11 @@ var L = (function () {
       map.setView(state.pos ? [state.pos.lat, state.pos.lon] : FRANCE, state.pos ? 15 : 5, { animate: true });
       toast(state.pos ? 'Recentré sur ta position' : 'Vue sur la France');
     }
-    /* recentrer remet aussi la carte dans le bon sens : nord en haut.
-       Placé après le déplacement : un saut de carte annulerait l'animation. */
-    try { if (typeof map.setBearing === 'function' && Math.abs(map.getBearing()) > 0.5) setBearing(0, false); } catch (e) {}
+    /* recentrer remet aussi la carte dans le bon sens : nord en haut, à plat.
+       On le fait après le déplacement, puis une seconde fois : un recadrage ou une
+       inertie de geste peut relancer une rotation juste après. */
+    resetNorth();
+    setTimeout(resetNorth, 260);
     updateRecenter();
   });
   updateRecenter();
