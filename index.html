@@ -473,6 +473,7 @@
   body.night .navbar{background:#12171f;color:#e7ecf3}
   body.night .hud{background:#12171f;color:#e7ecf3}
   body.night .rallybar{background:rgba(10,13,18,.95)}
+  body.rallying #hud{display:none}
   body.night .zonechip{background:#2a1d0d;color:#fbbf24;box-shadow:0 0 0 1px rgba(251,191,36,.25)}
   body.night .zc-bar{background:rgba(251,191,36,.18)}
   body.night .planinput{background:#1b222c;color:#e7ecf3}
@@ -541,11 +542,7 @@
       <button class="fab" id="recenter" type="button" aria-label="Recentrer">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
       </button>
-      <button class="fab" id="gbtn" type="button" aria-label="Voir sur Google Maps" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
-        </svg>
-      </button>
+
     </div>
 
     <div class="hud" id="hud" role="status" aria-live="polite">
@@ -587,7 +584,7 @@
 
     <div class="countdown" id="countdown" hidden aria-live="assertive">
       <div class="cd-num" id="cd-num">3</div>
-      <div class="cd-txt" id="cd-txt">Prêt ?</div>
+      <div class="cd-txt" id="cd-txt">Départ</div>
     </div>
 
     <div class="rallybar" id="rallybar" hidden>
@@ -764,7 +761,7 @@
                 <button class="sw" id="sw-rally" type="button" aria-pressed="false" aria-label="Mode rallye"></button>
               </div>
             </div>
-            <p class="set-note">Compte à rebours au départ, chrono en haut de l’écran, notes annoncées 300 m avant chaque virage et record enregistré pour chaque destination.</p>
+            <p class="set-note">Compte à rebours au départ, chrono et record par destination. Le copilote annonce <b>tous</b> les virages (même légers), avec la distance, et remplace le guidage habituel.</p>
           </div>
 
           <div class="set-panel" data-panel="about">
@@ -2688,38 +2685,91 @@ var L = (function () {
     var f = document.getElementById('zonechip-fill');
     if (f) f.style.width = Math.round(pct) + '%';
   }
+  var ZONE_PTS = 'zonePts', ZONE_RINGS = 'zoneRings', ZONE_GLOW = 'zoneGlow', ZONE_RING = 'zoneRing';
+
   function clearZoneLayers() {
     zones.layers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
     zones.markers.forEach(function (m) { if (map.hasLayer(m)) map.removeLayer(m); });
     zones.layers = []; zones.markers = [];
+    for (var gi = 0; gi < 12; gi++) {
+      var gid = ZONE_GLOW + gi;
+      if (map.mb.getLayer(gid)) { try { map.mb.removeLayer(gid); } catch (e) {} }
+    }
+    if (map.mb.getLayer(ZONE_RING)) { try { map.mb.removeLayer(ZONE_RING); } catch (e) {} }
+    [ZONE_PTS, ZONE_RINGS].forEach(function (id) {
+      if (map.mb.getSource(id)) { try { map.mb.removeSource(id); } catch (e) {} }
+    });
   }
 
+  /* rayon du halo, en pixels, pour chaque niveau de zoom (450 m géographiques) */
+  function radiusExpr(lat, k2) {
+    var k = 156543.03392 * Math.cos(lat * Math.PI / 180);   /* mètres par pixel au zoom 0 */
+    var f = k2 || 1;
+    var expr = ['interpolate', ['linear'], ['zoom']];
+    for (var z = 8; z <= 20; z++) {
+      expr.push(z, Math.max(2, Math.round(ZONE_R * f * Math.pow(2, z) / k * 100) / 100));
+    }
+    return expr;
+  }
+
+  /* un seul halo dégradé par zone : plus foncé au centre, transparent sur le bord */
   function drawZoneLayers() {
     clearZoneLayers();
     if (!state.prefs.zones || !zones.list.length) return;
-    /* de trop loin, les cercles se réduisent à des points : on ne les affiche pas */
-    if (map.getZoom() < 9) return;
+    if (map.getZoom() < 9) return;                       /* de loin, ce ne sont que des points */
 
-    /* trois anneaux, du plus clair (extérieur) au plus foncé (centre) */
-    var BANDS = [
-      { r: ZONE_R,        color: '#ffe0bb', opacity: 0.55, ring: true  },
-      { r: ZONE_R * 0.70, color: '#f6a94e', opacity: 0.50, ring: false },
-      { r: ZONE_R * 0.38, color: '#de6a1e', opacity: 0.55, ring: false }
-    ];
+    var latSum = 0;
+    var ptFeatures = zones.list.map(function (z) {
+      latSum += z.lat;
+      return { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [z.lon, z.lat] } };
+    });
+    var ringFeatures = zones.list.map(function (z) {
+      var ring = circleRing(z.lat, z.lon, ZONE_R).map(function (q) { return [q[1], q[0]]; });
+      return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring } };
+    });
+    var lat = latSum / zones.list.length;
 
+    map.mb.addSource(ZONE_PTS, { type: 'geojson', data: { type: 'FeatureCollection', features: ptFeatures } });
+    map.mb.addSource(ZONE_RINGS, { type: 'geojson', data: { type: 'FeatureCollection', features: ringFeatures } });
+
+    /* 1. le dégradé : 8 disques flous empilés, du plus large (clair) au plus serré
+          (foncé). Le cumul donne une teinte qui s'assombrit vers le centre. */
+    var N = 8;
     var zz = map.getZoom();
-    var fade = zz >= 15.2 ? 0.45 : (zz >= 14.2 ? 0.75 : 1);   /* de près, le fond reste lisible */
-
-    zones.list.forEach(function (z) {
-      BANDS.forEach(function (b, i) {
-        zones.layers.push(L.polygon(circleRing(z.lat, z.lon, b.r), {
-          color: b.color, weight: b.ring ? 2.6 : 1.6, fillOpacity: b.opacity * fade,
-          opacity: b.ring ? 0.95 : 0.55, dashArray: b.ring ? [2.4, 2] : null,
-          interactive: false
-        }).addTo(map));
+    var fade = zz >= 15.2 ? 0.55 : (zz >= 14.2 ? 0.82 : 1);   /* de près, on n'inonde pas la carte */
+    for (var bi = 0; bi < N; bi++) {
+      var t = bi / (N - 1);                     /* 0 = bord, 1 = centre */
+      map.mb.addLayer({
+        id: ZONE_GLOW + bi, type: 'circle', source: ZONE_PTS,
+        paint: {
+          'circle-color': t > 0.55 ? '#c2410c' : '#f97316',
+          'circle-radius': radiusExpr(lat, 1.0 - 0.85 * t),
+          'circle-blur': 0.55,
+          'circle-opacity': 0.14 * fade
+        }
       });
+    }
+    /* 2. le liseré qui marque la limite des 450 m */
+    map.mb.addLayer({
+      id: ZONE_RING, type: 'line', source: ZONE_RINGS,
+      paint: {
+        'line-color': '#ea580c', 'line-width': 2.2,
+        'line-opacity': 0.55, 'line-dasharray': [2.2, 2]
+      }
+    });
 
-      /* le triangle est au CENTRE du cercle */
+    /* les deux calques passent sous le tracé */
+    var before = (routeLayer && routeLayer._id) || (casingLayer && casingLayer._id) || null;
+    if (before) {
+      for (var mi = 0; mi < 12; mi++) {
+        var mid = ZONE_GLOW + mi;
+        try { if (map.mb.getLayer(mid) && map.mb.getLayer(before)) map.mb.moveLayer(mid, before); } catch (e) {}
+      }
+      try { if (map.mb.getLayer(ZONE_RING) && map.mb.getLayer(before)) map.mb.moveLayer(ZONE_RING, before); } catch (e) {}
+    }
+
+    /* le panneau de danger reste au centre */
+    zones.list.forEach(function (z) {
       zones.markers.push(L.marker([z.lat, z.lon], {
         icon: L.divIcon({
           className: '', iconSize: [30, 30], iconAnchor: [15, 15],
@@ -2785,37 +2835,41 @@ var L = (function () {
   function buildPaceNotes(r) {
     var pts = r.pts, cum = r.cum, notes = [], last = -999;
     for (var i = 2; i < pts.length - 2; i++) {
-      if (cum[i] - last < 30) continue;
+      if (cum[i] - last < 40) continue;
       var a = pts[i - 1], b = pts[i], c = pts[i + 1];
       var d = ((bearing(b, c) - bearing(a, b) + 540) % 360) - 180;   /* >0 : droite */
       var ad = Math.abs(d), sev = 0;
       if (ad >= 118) sev = 1; else if (ad >= 95) sev = 2; else if (ad >= 68) sev = 3;
-      else if (ad >= 45) sev = 4; else if (ad >= 28) sev = 5;
-      if (!sev) continue;
-      notes.push({ at: cum[i], dir: d > 0 ? 'D' : 'G', sev: sev, said: false });
+      else if (ad >= 45) sev = 4; else if (ad >= 28) sev = 5; else if (ad >= 12) sev = 6;
+      if (!sev) continue;                       /* sous 12°, ce n'est plus un virage */
+      var dir = d > 0 ? 'D' : 'G';
+      /* deux notes de même sens coup sur coup : on garde la plus forte */
+      var prev = notes[notes.length - 1];
+      if (prev && prev.dir === dir && cum[i] - prev.at < 110) {
+        if (sev < prev.sev) { prev.sev = sev; prev.at = cum[i]; prev.angle = ad; }
+        last = cum[i];
+        continue;
+      }
+      notes.push({ at: cum[i], dir: dir, sev: sev, angle: ad, said: false });
       last = cum[i];
     }
     return notes;
   }
 
-  var RALLY_POOL = {
-    1: { G: ['épingle à gauche, sors les rames', 'épingle gauche, ça tourne sec, on respire'],
-         D: ['épingle à droite, sors les rames', 'épingle droite, ça tourne sec, on respire'] },
-    2: { G: ['gauche 2, très serré, on y va mollo', 'gauche 2, tu vas sentir le volant'],
-         D: ['droite 2, très serré, on y va mollo', 'droite 2, tu vas sentir le volant'] },
-    3: { G: ['gauche 3, garde la trajectoire, champion', 'gauche 3, propre et net'],
-         D: ['droite 3, garde la trajectoire, champion', 'droite 3, propre et net'] },
-    4: { G: ['gauche 4, ça passe tout seul', 'gauche 4, t’es large'],
-         D: ['droite 4, ça passe tout seul', 'droite 4, t’es large'] },
-    5: { G: ['gauche 5, tranquille', 'gauche 5, un coup de volant et hop'],
-         D: ['droite 5, tranquille', 'droite 5, un coup de volant et hop'] }
+  var RALLY_WORDS = {
+    1: 'épingle', 2: 'virage très serré', 3: 'virage serré',
+    4: 'virage', 5: 'courbe', 6: 'léger virage'
   };
-  function rallyPhrase(n) {
-    var pool = RALLY_POOL[n.sev][n.dir];
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
+  var RALLY_SHORT = { 1: 'épingle', 2: 'très serré', 3: 'serré', 4: 'virage', 5: 'courbe', 6: 'léger' };
   function rallyLabel(n) {
-    return (n.dir === 'D' ? 'droite' : 'gauche') + ' ' + n.sev;
+    return RALLY_WORDS[n.sev] + ' à ' + (n.dir === 'D' ? 'droite' : 'gauche');
+  }
+  function rallyShort(n) {
+    return RALLY_SHORT[n.sev] + ' ' + (n.dir === 'D' ? 'droite' : 'gauche');
+  }
+  /* annonce complète : la distance d'abord, puis la consigne, sans commentaire */
+  function rallyPhrase(n) {
+    return rallyLabel(n);
   }
 
   var AC = null;
@@ -2837,7 +2891,7 @@ var L = (function () {
     var txt = document.getElementById('cd-txt');
     if (!box || !num) { then(); return; }
     box.hidden = false;
-    var seq = [['3', 'Prêt ?'], ['2', 'Prêt ?'], ['1', 'Prêt ?'], ['PARTEZ !', '']];
+    var seq = [['3', 'Départ'], ['2', 'Départ'], ['1', 'Départ'], ['GO', '']];
     var k = 0;
     function step() {
       if (k >= seq.length) {
@@ -2880,14 +2934,14 @@ var L = (function () {
     }
     var rest = rally.notes.slice(rally.idx).filter(function (n) {
       return n.at - state.traveled < 6000;            /* au-delà, ce n'est pas une consigne utile */
-    }).slice(0, 3);
+    }).slice(0, 2);                                   /* deux notes suffisent à l'écran */
     if (!rest.length && next) rest = [next];
     if (!rest.length) { wrap.innerHTML = '<span class="rb-note">Ligne d’arrivée en vue</span>'; return; }
     wrap.innerHTML = rest.map(function (n, i) {
       var d = Math.max(0, n.at - state.traveled);
       var t = d > 950 ? (Math.round(d / 100) / 10) + ' km' : Math.round(d / 10) * 10 + ' m';
       return '<span class="rb-note' + (i === 0 ? ' first' : '') + '">' +
-        '<span class="sev">' + n.sev + '</span>' + rallyLabel(n) +
+        '<span class="sev">' + n.sev + '</span>' + rallyShort(n) +
         ' <b>' + t + '</b></span>';
     }).join('');
   }
@@ -2901,15 +2955,17 @@ var L = (function () {
     var n = rally.notes[rally.idx];
     if (n && n.at - state.traveled > 5000 && !n.straightSaid) {
       n.straightSaid = true;
-      speak('Tout droit sur ' + Math.max(1, Math.round((n.at - state.traveled) / 1000)) +
-            ' kilomètres, profite du paysage.');
+      speak('Tout droit sur ' + Math.max(1, Math.round((n.at - state.traveled) / 1000)) + ' kilomètres.');
     }
     if (n) {
       var speed = state.route.time > 0 ? state.route.length / state.route.time : 12;
       var lead = Math.max(70, Math.min(400, speed * (n.sev <= 2 ? 9 : 7)));
       if (!n.said && n.at - state.traveled <= lead) {
         n.said = true;
-        speak(rallyPhrase(n));
+        var dd = Math.max(0, n.at - state.traveled);
+        var dist = dd > 950 ? (Math.round(dd / 100) / 10).toString().replace('.', ',') + ' kilomètres'
+                            : Math.max(50, Math.round(dd / 50) * 50) + ' mètres';
+        speak(dd < 40 ? 'Maintenant, ' + rallyPhrase(n) : 'Dans ' + dist + ', ' + rallyPhrase(n));
       }
     }
     rallyRenderNotes();
@@ -2917,6 +2973,7 @@ var L = (function () {
 
   function rallyStart() {
     rally.on = true;
+    document.body.classList.add('rallying');
     rally.startTs = 0;
     rally.idx = 0;
     rally.notes = [];
@@ -2930,6 +2987,7 @@ var L = (function () {
   }
   function rallyStop() {
     rally.on = false;
+    document.body.classList.remove('rallying');
     var bar = document.getElementById('rallybar');
     if (bar) bar.hidden = true;
     try { setSheetHeight(); } catch (e) {}
@@ -2967,7 +3025,7 @@ var L = (function () {
     topEl.classList.add('hidden');
     setSheetHeight();
     map.setView(r.pts[0], 16, { animate: false });
-    speak(nextInstructionText());
+    if (!rally.on) speak(nextInstructionText());   /* en rallye, le copilote prend la parole */
     if (rally.on) {
       rally.notes = buildPaceNotes(r);
       rally.idx = 0;
@@ -3093,7 +3151,8 @@ var L = (function () {
 
     if (i !== state.lastStep) {
       state.lastStep = i;
-      if (state.navigating) speak(s ? s.text : '');
+      /* en rallye, c'est le copilote qui parle : on coupe les consignes habituelles */
+      if (state.navigating && !rally.on) speak(s ? s.text : '');
     }
   }
 
@@ -3188,7 +3247,7 @@ var L = (function () {
 
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); } };
   }
   requestAnimationFrame(loop);
 
@@ -3211,7 +3270,7 @@ var L = (function () {
         '<div class="rr-t">Chrono rallye</div>' +
         '<div class="rr-v">' + fmtChrono(ms) + '</div>' +
         '<div class="rr-s' + (best ? ' best' : '') + '">' +
-        (best ? (prev ? 'Record battu de ' + fmtChrono(prev - ms) + ' — joli coup' : 'Premier temps : le record est à toi') :
+        (best ? (prev ? 'Record battu de ' + fmtChrono(prev - ms) : 'Premier temps de référence') :
                 'Record à battre : ' + fmtChrono(prev)) +
         '</div></div>';
       rallyStop();
