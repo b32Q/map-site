@@ -1685,17 +1685,31 @@ var L = (function () {
       alternates: 3
     };
     if (extra) for (var k in extra) body[k] = extra[k];
-    var valh = fetchTimeout('https://valhalla1.openstreetmap.de/route', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }, 8000).then(function (r) {
-      if (!r.ok) throw new Error('route ' + r.status);
-      return r.json();
-    }).then(function (d) {
-      var list = [];
-      if (d.trip) list.push(parseTrip(d.trip));
-      (d.alternates || []).forEach(function (a) { if (a.trip) list.push(parseTrip(a.trip)); });
-      return list;
-    }).catch(function () { return []; });
+    function ask(extraOpts) {
+      var b2 = JSON.parse(JSON.stringify(body));
+      if (extraOpts) {
+        b2.costing_options = b2.costing_options || {};
+        var key = b2.costing;
+        b2.costing_options[key] = Object.assign({}, b2.costing_options[key] || {}, extraOpts);
+      }
+      return fetchTimeout('https://valhalla1.openstreetmap.de/route', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b2)
+      }, 8000).then(function (r) {
+        if (!r.ok) throw new Error('route ' + r.status);
+        return r.json();
+      }).then(function (d) {
+        var out = [];
+        if (d.trip) out.push(parseTrip(d.trip));
+        (d.alternates || []).forEach(function (a) { if (a.trip) out.push(parseTrip(a.trip)); });
+        return out;
+      }).catch(function () { return []; });
+    }
+
+    /* deux calculs : le plus rapide, et le plus court (celui qui emprunte les
+       chemins de terre et les sentiers plutôt que de contourner) */
+    var valh = Promise.all([ask(null), ask({ shortest: true })]).then(function (both) {
+      return both[0].concat(both[1]);
+    });
 
     var osrm = osrmRoute(from, to, extra).then(function (r) { return [r]; }).catch(function () { return []; });
 
@@ -2745,8 +2759,10 @@ var L = (function () {
       });
       keep.sort(function (a, b) { return a.time - b.time; });
       if (keep.length > 1) {
+        var shortest = keep.reduce(function (m, r) { return r.length < m.length ? r : m; }, keep[0]);
         keep.forEach(function (r, i) {
           if (i === 0) r.label = 'Le plus rapide';
+          else if (r === shortest) r.label = 'Le plus court';
           else if (r.label === 'À pied' || r.label === 'À vélo') r.label = 'Autre chemin';
           else r.label = r.label.replace('Ton itinéraire', 'Plus long');
         });
