@@ -43,7 +43,7 @@
     contain:paint;clip-path:inset(0 round 38px)}
   .notch{position:absolute;top:12px;left:50%;transform:translateX(-50%);width:104px;height:26px;border-radius:14px;background:#000;z-index:1200}
   .phone::after{content:"";position:absolute;inset:0;border-radius:46px;pointer-events:none;z-index:1300;box-shadow:inset 0 0 0 9px #000}
-  @media (max-width:560px){
+  @media (max-width:560px), (max-height:560px){
     body{background:#e9e6df;display:block}
     .phone{width:100vw;height:100dvh;border-radius:0;padding:0;box-shadow:none;transform:none}
     .screen{border-radius:0}
@@ -78,7 +78,7 @@
   .rarrow svg{width:13px;height:13px;display:block}
   .jam{width:30px;height:30px;border-radius:50%;background:var(--danger);border:2.5px solid #fff;display:grid;place-items:center;box-shadow:0 5px 12px -4px rgba(11,18,32,.5)}
 
-  .top{position:absolute;top:calc(18px + env(safe-area-inset-top));left:14px;right:14px;z-index:900;
+  .top{position:absolute;top:calc(18px + env(safe-area-inset-top));right:14px;left:auto;z-index:900;
     transition:opacity .25s ease,transform .25s ease}
   .top.hidden{opacity:0;transform:translateY(-16px);pointer-events:none}
   .search{display:flex;align-items:center;gap:10px;height:52px;padding:0 6px 0 15px;background:#fff;border-radius:15px;
@@ -110,6 +110,11 @@
     transform:translateY(0);transition:transform .32s cubic-bezier(.22,.68,.24,1);max-height:78%;display:flex;flex-direction:column;
     will-change:transform}
   .sheet.dragging{transition:none!important}
+  /* téléphone à l'horizontale : la fiche prend moins de place, la carte reste utile */
+  @media (max-height:560px){
+    .sheet{max-height:52%}
+    #vehpill{display:none!important}   /* en paysage, la place manque : le véhicule se règle dans Paramètres */
+  }
   .grip{display:block;margin:0 auto 6px;padding:9px 46px 7px;border:0;background:none;cursor:grab;flex:none;touch-action:none}
   .grip:active{cursor:grabbing}
   .grip span{display:block;width:40px;height:4px;border-radius:2px;background:#dfe3ea;transition:background .2s}
@@ -249,7 +254,7 @@
   .ovl{position:absolute;inset:0;z-index:1100;background:rgba(11,18,32,.42);display:flex;align-items:flex-end;
     opacity:0;visibility:hidden;transition:opacity .2s ease,visibility .2s}
   .ovl.on{opacity:1;visibility:visible}
-  .ovl-card{width:100%;max-height:92%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;
+  .ovl-card{width:100%;min-height:88%;max-height:92%;overflow-y:auto;background:#fff;border-radius:22px 22px 0 0;
     padding:12px 18px calc(16px + env(safe-area-inset-bottom));transform:translateY(24px);transition:transform .26s ease}
   .ovl.on .ovl-card{transform:translateY(0)}
   .ovl-head{display:flex;align-items:center;justify-content:space-between}
@@ -267,7 +272,7 @@
   .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;
     transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
   .sw[aria-pressed="true"]{background:var(--blue)}
-  .sw[aria-pressed="true"]::after{transform:translateX(18px)}
+  .sw[aria-pressed="true"]::after{transform:translateX(14px)}
   .plain{height:34px;padding:0 12px;border-radius:9px;background:var(--chip);font-size:12.5px;font-weight:500;color:#344054;flex:none}
   .plain:disabled{opacity:.45}
   .planinput{height:34px;padding:0 10px;border-radius:9px;background:var(--chip);font-size:12.5px;max-width:170px}
@@ -284,8 +289,9 @@
   .maplibregl-ctrl-attrib.maplibregl-compact{min-height:18px}
   .maplibregl-ctrl-scale{font-size:9.5px;border-color:rgba(60,70,85,.45);color:#475467;background:rgba(255,255,255,.6)}
   /* le zoom +/- fait doublon avec nos boutons et ses cibles sont trop petites */
-  @media (max-width: 760px){
-    .maplibregl-ctrl-top-right{display:none}
+  @media (max-width: 760px), (max-height: 560px){
+    .maplibregl-ctrl-top-right,
+    .maplibregl-ctrl-top-left{display:none}
     .maplibregl-ctrl-scale{display:none}
   }
 
@@ -293,14 +299,14 @@
   .grip{padding:16px 56px 12px;min-height:44px}
   .fav-del{width:40px;height:40px}
   .fav-main{min-height:44px}
-  .sw{width:52px;height:34px}
-  .sw::after{width:26px;height:26px;top:4px;left:4px}
-  .sw[aria-pressed="true"]::after{transform:translateX(18px)}
+  .sw{width:54px;height:40px}
+  .sw::after{width:30px;height:30px;top:5px;left:5px}
+  .sw[aria-pressed="true"]::after{transform:translateX(14px)}
   #clear-recents{min-height:40px;padding:6px 2px}
   #voice-test{min-height:40px}
 
   /* ---------- interface type application de navigation ---------- */
-  .top{left:14px;right:auto;top:calc(12px + env(safe-area-inset-top))}
+  .top{right:14px;left:auto;top:calc(12px + env(safe-area-inset-top))}
   .menubtn{position:relative;width:48px;height:48px;border-radius:16px;background:#fff;
     display:grid;place-items:center;color:#20242b;
     box-shadow:0 12px 26px -14px rgba(11,18,32,.5),0 0 0 1px rgba(16,24,40,.06);
@@ -343,7 +349,7 @@
   .dep-txt{display:flex;flex-direction:column;min-width:0;flex:1}
   .dep-lab{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
   .dep-val{font-size:13.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dep-edit{font-size:12.5px;font-weight:600;color:var(--blue);padding:8px 10px;border-radius:10px;flex:none}
+  .dep-edit{font-size:12.5px;font-weight:600;color:var(--blue);padding:8px 10px;border-radius:10px;flex:none;min-height:40px}
   .dep-edit:active{background:#eaf1ff}
   /* point de position plus discret */
   .me-dot{width:14px;height:14px;border-radius:50%;background:#2f6bff;box-shadow:0 0 0 3px #fff,0 2px 8px rgba(11,18,32,.35)}
@@ -359,7 +365,7 @@
   .set-card .hint{font-size:11.5px;margin-top:2px}
   .set-card.about .row{padding:11px 0}
   .set-note{font-size:11.5px;color:var(--muted);text-align:center;margin:14px 0 4px;line-height:1.5}
-  .plain{height:38px;padding:0 14px;border-radius:11px;background:#fff;font-size:13px;font-weight:600;
+  .plain{height:40px;padding:0 14px;border-radius:11px;background:#fff;font-size:13px;font-weight:600;
     color:#344054;box-shadow:0 0 0 1px rgba(16,24,40,.08);flex:none}
   .plain:active{background:#eef1f5}
   .plain.danger{color:#b42318}
@@ -418,13 +424,22 @@
   /* ---------- zones de danger ---------- */
   .zonechip{position:absolute;left:50%;transform:translateX(-50%);
     top:calc(178px + env(safe-area-inset-top));z-index:930;
-    display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;
+    display:inline-flex;flex-direction:column;gap:6px;padding:8px 13px 9px;border-radius:14px;
     background:#fff7ed;color:#9a3412;font-size:12.5px;font-weight:650;white-space:nowrap;
-    box-shadow:0 10px 24px -14px rgba(11,18,32,.5),0 0 0 1px rgba(154,52,18,.18)}
+    box-shadow:0 10px 24px -14px rgba(11,18,32,.5),0 0 0 1px rgba(154,52,18,.18);min-width:190px}
   .zonechip[hidden]{display:none}
+  .zc-row{display:flex;align-items:center;gap:7px}
   .zonechip svg{width:15px;height:15px;flex:none}
-  .ztri{filter:drop-shadow(0 2px 3px rgba(11,18,32,.28))}
-  .ztri svg{width:26px;height:26px;display:block}
+  /* barre d'entrée → sortie de la zone */
+  .zc-bar{height:4px;border-radius:99px;background:rgba(154,52,18,.16);overflow:hidden}
+  .zc-bar[hidden]{display:none}
+  .zc-bar i{display:block;height:100%;width:0%;border-radius:99px;
+    background:linear-gradient(90deg,#fb923c,#ea580c);transition:width .35s linear}
+  .ztri{filter:drop-shadow(0 3px 5px rgba(11,18,32,.32))}
+  .ztri-b{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;
+    background:#fff7ed;box-shadow:0 0 0 1.5px rgba(154,52,18,.45)}
+  .ztri svg{width:19px;height:19px;display:block}
+  body.night .ztri-b{background:#2a1d0d;box-shadow:0 0 0 1.5px rgba(251,191,36,.5)}
 
   /* ---------- mode nuit ---------- */
   body.night{
@@ -459,8 +474,35 @@
   body.night .hud{background:#12171f;color:#e7ecf3}
   body.night .rallybar{background:rgba(10,13,18,.95)}
   body.night .zonechip{background:#2a1d0d;color:#fbbf24;box-shadow:0 0 0 1px rgba(251,191,36,.25)}
+  body.night .zc-bar{background:rgba(251,191,36,.18)}
   body.night .planinput{background:#1b222c;color:#e7ecf3}
   body.night .linkbtn{color:#9aa5b4}
+
+  /* ---------- paramètres : menu à icônes colorées ---------- */
+  .set-menu{padding:2px 0 16px}
+  .set-group{margin:16px 0 6px;font-size:11.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--muted)}
+  .set-row{display:flex;align-items:center;gap:13px;width:100%;padding:9px 2px;
+    background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer;text-align:left}
+  .set-row:last-of-type{border-bottom:0}
+  .set-row:active{background:rgba(0,0,0,.03)}
+  body.night .set-row:active{background:rgba(255,255,255,.04)}
+  .set-ic{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex:none;color:#fff;
+    box-shadow:0 2px 6px -2px rgba(11,18,32,.45)}
+  .set-ic svg{width:22px;height:22px}
+  .set-lab{flex:1;font-size:15.5px;font-weight:560;color:var(--text)}
+  .set-chev{flex:none;color:var(--muted);opacity:.7}
+  .set-chev svg{width:17px;height:17px;display:block}
+  .set-panels[hidden]{display:none}
+  .set-panel{display:none}
+  .set-panel.on{display:block}
+  .backbtn{width:34px;height:34px;border-radius:10px;border:0;background:none;color:var(--text);
+    display:grid;place-items:center;cursor:pointer;margin-right:2px;flex:none}
+  .backbtn[hidden]{display:none}
+  .backbtn:active{background:rgba(0,0,0,.05)}
+  .set-note{margin:12px 2px 4px;font-size:12px;line-height:1.5;color:var(--muted)}
+  .ovl-head{gap:6px}
+  .ovl-head h3{flex:1}
 </style>
 </head>
 <body>
@@ -560,8 +602,11 @@
     </div>
 
     <div class="zonechip" id="zonechip" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 17.2v.1"/></svg>
-      <span id="zonechip-txt">Zone de danger</span>
+      <div class="zc-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 17.2v.1"/></svg>
+        <span id="zonechip-txt">Zone de danger</span>
+      </div>
+      <div class="zc-bar" id="zonechip-bar" hidden><i id="zonechip-fill"></i></div>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -591,97 +636,148 @@
     <div class="ovl" id="ovl" role="dialog" aria-modal="true" aria-label="Paramètres">
       <div class="ovl-card">
         <div class="ovl-head">
-          <h3>Paramètres</h3>
+          <button class="backbtn" id="ovl-back" type="button" aria-label="Retour" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><path d="M15 5l-7 7 7 7"/></svg>
+          </button>
+          <h3 id="ovl-title">Paramètres</h3>
           <button class="x" id="ovl-x" type="button" aria-label="Fermer">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:15px;height:15px"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </div>
 
-        <p class="sec-title">Véhicule</p>
-        <div class="seg" id="seg-costing">
-          <button type="button" data-costing="auto" aria-pressed="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
-            Voiture
-          </button>
-          <button type="button" data-costing="bicycle" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17l4-7h4M12 17l-2-5"/></svg>
-            Vélo
-          </button>
-          <button type="button" data-costing="pedestrian" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg>
-            À pied
-          </button>
+        <div class="set-menu" id="set-menu">
+          <button class="set-row" type="button" data-panel="general"><span class="set-ic" style="background:#25c2d8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg></span><span class="set-lab">Général</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="map"><span class="set-ic" style="background:#22a45d"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5L3.6 6.8v13L9 17.4l6 2.4 5.4-2.3v-13L15 6.9z"/><path d="M9 4.5v12.9M15 6.9v12.9"/></svg></span><span class="set-lab">Affichage de la carte</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="sound"><span class="set-ic" style="background:#22b8e6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.6h3.4L12 6v12L7.4 14.4H4z"/><path d="M16 9.2a3.6 3.6 0 010 5.6M18.6 7a7 7 0 010 10"/></svg></span><span class="set-lab">Voix et son</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button>
+
+          <p class="set-group">Préférences de conduite</p>
+          <button class="set-row" type="button" data-panel="nav"><span class="set-ic" style="background:#4f7cf7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l8.4 17-8.4-4.6L3.6 20.2z"/></svg></span><span class="set-lab">Navigation</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="vehicle"><span class="set-ic" style="background:#38b6f0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 16.2v-3.4l2-5h11.6l2 5v3.4"/><circle cx="7.6" cy="17.6" r="1.7"/><circle cx="16.4" cy="17.6" r="1.7"/><path d="M4.2 12.8h15.6"/></svg></span><span class="set-lab">Infos sur le véhicule</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="alerts"><span class="set-ic" style="background:#f79009"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6l9 16.2H3z"/><path d="M12 9.4v4.4M12 16.6v.2"/></svg></span><span class="set-lab">Alertes</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="rally"><span class="set-ic" style="background:#ec4899"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.6" r="7.1"/><path d="M12 10v3.9l2.5 1.6"/><path d="M9.7 3.5h4.6"/><path d="M12 3.5v2.9"/></svg></span><span class="set-lab">Mode rallye</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button>
+
+          <p class="set-group">Plus</p>
+          <button class="set-row" type="button" data-panel="data"><span class="set-ic" style="background:#667085"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6.4" rx="7" ry="2.8"/><path d="M5 6.4v11.2c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8V6.4"/><path d="M5 12c0 1.6 3.1 2.8 7 2.8s7-1.2 7-2.8"/></svg></span><span class="set-lab">Données</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button><button class="set-row" type="button" data-panel="about"><span class="set-ic" style="background:#8b5cf6"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.8"/><path d="M12 10.8v5.4M12 7.8v.2"/></svg></span><span class="set-lab">À propos</span><span class="set-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button>
         </div>
 
-        <div id="avoids-wrap">
-          <p class="sec-title">À éviter</p>
-          <div class="set-card" id="avoids"></div>
-        </div>
+        <div class="set-panels" id="set-panels" hidden>
 
-        <p class="sec-title">Guidage</p>
-        <div class="set-card">
-          <div class="row">
-            <span class="lab">Guidage vocal<span class="hint">la voix du téléphone, en français</span></span>
-            <button class="sw" id="sw-voice" type="button" aria-pressed="true" aria-label="Guidage vocal"></button>
+          <div class="set-panel" data-panel="general">
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Réinitialiser<span class="hint">voix, véhicule, routes à éviter, alertes</span></span>
+                <button class="plain danger" id="reset-opts" type="button">Réinitialiser</button>
+              </div>
+            </div>
+            <p class="set-note">Navigation · version d’essai, sans compte et sans publicité.</p>
           </div>
-          <div class="row">
-            <span class="lab">Annonces des virages<span class="hint" id="voice-test-hint">dans 300 m, tournez à droite</span></span>
-            <button class="plain" id="voice-test" type="button">Écouter</button>
-          </div>
-        </div>
 
-        <p class="sec-title">Rallye</p>
-        <div class="set-card">
-          <div class="row">
-            <span class="lab">Mode rallye<span class="hint">3-2-1, chrono et notes du copilote</span></span>
-            <button class="sw" id="sw-rally" type="button" aria-pressed="false" aria-label="Mode rallye"></button>
+          <div class="set-panel" data-panel="data">
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Destinations récentes<span class="hint">efface l’historique de recherche</span></span>
+                <button class="plain" id="set-clear-recents" type="button">Effacer</button>
+              </div>
+            </div>
+            <p class="set-note">Tout reste sur le téléphone : aucune destination n’est envoyée ni conservée ailleurs.</p>
           </div>
-        </div>
 
-        <p class="sec-title">Départ prévu</p>
-        <div class="set-card">
-          <div class="row">
-            <span class="lab">Heure de départ<span class="hint" id="plan-hint">maintenant</span></span>
-            <input class="planinput" type="datetime-local" id="plan-input" lang="fr" aria-label="Heure de départ prévue">
+          <div class="set-panel" data-panel="map">
+            <div class="seg" id="seg-theme">
+              <button type="button" data-theme="auto" aria-pressed="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 010 17.2z" fill="currentColor" stroke="none"/></svg>
+                Auto
+              </button>
+              <button type="button" data-theme="day" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12H5M19 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></svg>
+                Jour
+              </button>
+              <button type="button" data-theme="night" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M20.5 14.6A8.6 8.6 0 019.4 3.5a8.6 8.6 0 1011.1 11.1z"/></svg>
+                Nuit
+              </button>
+            </div>
+            <p class="set-note">En « Auto », la carte passe en sombre entre 21 h et 7 h.</p>
           </div>
-        </div>
-        <button class="ghost" id="plan-clear" type="button">Partir maintenant</button>
 
-        <p class="sec-title">Données</p>
-        <div class="set-card">
-          <div class="row">
-            <span class="lab">Destinations récentes<span class="hint">efface l’historique de recherche</span></span>
-            <button class="plain" id="set-clear-recents" type="button">Effacer</button>
+          <div class="set-panel" data-panel="sound">
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Guidage vocal<span class="hint">la voix du téléphone, en français</span></span>
+                <button class="sw" id="sw-voice" type="button" aria-pressed="true" aria-label="Guidage vocal"></button>
+              </div>
+              <div class="row">
+                <span class="lab">Annonces des virages<span class="hint" id="voice-test-hint">dans 300 m, tournez à droite</span></span>
+                <button class="plain" id="voice-test" type="button">Écouter</button>
+              </div>
+            </div>
           </div>
-          <div class="row">
-            <span class="lab">Réinitialiser<span class="hint">voix, véhicule, routes à éviter</span></span>
-            <button class="plain danger" id="reset-opts" type="button">Réinitialiser</button>
+
+          <div class="set-panel" data-panel="nav">
+            <p class="sec-title">Départ prévu</p>
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Heure de départ<span class="hint" id="plan-hint">maintenant</span></span>
+                <input class="planinput" type="datetime-local" id="plan-input" lang="fr" aria-label="Heure de départ prévue">
+              </div>
+            </div>
+            <button class="ghost" id="plan-clear" type="button">Partir maintenant</button>
+            <p class="set-note">En partant à une heure précise, l’arrivée affichée tient compte de cette heure de départ.</p>
           </div>
-        </div>
 
-        <p class="sec-title">Affichage</p>
-        <div class="seg" id="seg-theme">
-          <button type="button" data-theme="auto" aria-pressed="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 010 17.2z" fill="currentColor" stroke="none"/></svg>
-            Auto
-          </button>
-          <button type="button" data-theme="day" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12H5M19 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></svg>
-            Jour
-          </button>
-          <button type="button" data-theme="night" aria-pressed="false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M20.5 14.6A8.6 8.6 0 019.4 3.5a8.6 8.6 0 1011.1 11.1z"/></svg>
-            Nuit
-          </button>
-        </div>
+          <div class="set-panel" data-panel="vehicle">
+            <div id="avoids-wrap">
+              <div class="seg" id="seg-costing">
+                <button type="button" data-costing="auto" aria-pressed="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
+                  Voiture
+                </button>
+                <button type="button" data-costing="bicycle" aria-pressed="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17l4-7h4M12 17l-2-5"/></svg>
+                  Vélo
+                </button>
+                <button type="button" data-costing="pedestrian" aria-pressed="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg>
+                  À pied
+                </button>
+              </div>
+            </div>
+            <p class="sec-title">À éviter</p>
+            <div class="set-card" id="avoids"></div>
+            <p class="set-note">Le vélo et la marche empruntent les pistes cyclables et les chemins piétons.</p>
+          </div>
 
-        <p class="sec-title">À propos</p>
-        <div class="set-card about">
-          <div class="row"><span class="lab">Carte<span class="hint">OpenFreeMap · données OpenStreetMap</span></span></div>
-          <div class="row"><span class="lab">Itinéraires<span class="hint">Valhalla · OSRM</span></span></div>
-          <div class="row"><span class="lab">Adresses<span class="hint">BAN · Nominatim</span></span></div>
+          <div class="set-panel" data-panel="alerts">
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Zones de danger<span class="hint">les trois anneaux orange sur la carte</span></span>
+                <button class="sw" id="sw-zones" type="button" aria-pressed="true" aria-label="Zones de danger"></button>
+              </div>
+            </div>
+            <p class="sec-title">Prévenir à quelle distance</p>
+            <div class="seg" id="seg-warn">
+              <button type="button" data-warn="2000" aria-pressed="true">2 km avant</button>
+              <button type="button" data-warn="1000" aria-pressed="false">1 km avant</button>
+            </div>
+            <p class="set-note">L’alerte tombe avant le bord extérieur du cercle. La zone est large exprès : elle signale un secteur, pas un appareil précis.</p>
+          </div>
+
+          <div class="set-panel" data-panel="rally">
+            <div class="set-card">
+              <div class="row">
+                <span class="lab">Mode rallye<span class="hint">3-2-1, chrono et notes du copilote</span></span>
+                <button class="sw" id="sw-rally" type="button" aria-pressed="false" aria-label="Mode rallye"></button>
+              </div>
+            </div>
+            <p class="set-note">Compte à rebours au départ, chrono en haut de l’écran, notes annoncées 300 m avant chaque virage et record enregistré pour chaque destination.</p>
+          </div>
+
+          <div class="set-panel" data-panel="about">
+            <div class="set-card about">
+              <div class="row"><span class="lab">Carte<span class="hint">OpenFreeMap · données OpenStreetMap</span></span></div>
+              <div class="row"><span class="lab">Itinéraires<span class="hint">Valhalla · OSRM</span></span></div>
+              <div class="row"><span class="lab">Adresses<span class="hint">BAN · Nominatim</span></span></div>
+              <div class="row"><span class="lab">Zones de danger<span class="hint">jeu de données public Sécurité routière</span></span></div>
+            </div>
+            <p class="set-note">Aucune clé, aucun compte — connexion internet nécessaire.</p>
+          </div>
+
         </div>
-        <p class="set-note">Aucune clé, aucun compte — connexion internet nécessaire.</p>
       </div>
     </div>
   </div>
@@ -836,7 +932,7 @@ var L = (function () {
       pitchWithRotate: false,
       touchPitch: false
     });
-    this.mb.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    this.mb.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     this.mb.addControl(new maplibregl.ScaleControl({ maxWidth: 110, unit: 'metric' }), 'bottom-left');
 
     this.mb.on('load', function () {
@@ -1125,6 +1221,8 @@ var L = (function () {
       });
       if (p.costing === 'auto' || p.costing === 'bicycle' || p.costing === 'pedestrian') state.prefs.costing = p.costing;
       if (p.theme === 'auto' || p.theme === 'day' || p.theme === 'night') state.prefs.theme = p.theme;
+      if (typeof p.zones === 'boolean') state.prefs.zones = p.zones;
+      if (p.zoneWarn === 1000 || p.zoneWarn === 2000) state.prefs.zoneWarn = p.zoneWarn;
     } catch (e) {}
   }
   function savePrefs() {
@@ -1136,7 +1234,7 @@ var L = (function () {
     phase: 'home', dest: null, routes: [], sel: 0, route: null,
     traveled: 0, playing: false, following: false, navigating: false, arrived: false,
     speedFactor: 1, lastStep: -1,
-    prefs: { costing: 'auto', tolls: false, highways: false, ferry: false, tracks: false, voice: VOICE_OK, rally: false, theme: 'auto' },
+    prefs: { costing: 'auto', tolls: false, highways: false, ferry: false, tracks: false, voice: VOICE_OK, rally: false, theme: 'auto', zones: true, zoneWarn: 2000 },
     planTs: null,
     pos: null, posLabel: '', posDenied: false, centered: false, pickMode: 'dest', geoError: 0,
     fix: null, gpsLive: false, gpsWatch: null, ri: 0, lastReroute: 0, offCount: 0,
@@ -1226,8 +1324,9 @@ var L = (function () {
     /* de loin, les chevrons blancs sur le trait se lisent comme des pointillés */
     document.body.classList.toggle('lowzoom', map.getZoom() < 11);
     var showZones = map.getZoom() >= 9;
-    if (showZones !== zones.shown) {
-      zones.shown = showZones;
+    var band = map.getZoom() >= 15.2 ? 'a' : (map.getZoom() >= 14.2 ? 'b' : 'c');
+    if (showZones !== zones.shown || band !== zones.band) {
+      zones.shown = showZones; zones.band = band;
       try { showZones ? drawZoneLayers() : clearZoneLayers(); } catch (e) {}
     }
     if (!routeLayer) return;
@@ -1874,7 +1973,8 @@ var L = (function () {
     document.documentElement.style.setProperty('--sheet-h', Math.round(px) + 'px');
     document.documentElement.style.setProperty('--credit', (state.navigating ? 106 : Math.round(px) + 6) + 'px');
     /* au-dessus de la pastille (44 px) + 10 px d'écart ; en guidage, la pastille disparaît */
-    fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14 + 54) + 'px';
+    var gap = window.innerHeight <= 560 ? 4 : 68;   /* paysage : pas de pastille à dégager */
+    fabCol.style.bottom = (state.navigating ? 86 : Math.round(px) + 14 + gap) + 'px';
       try { updateRecenter(); } catch (e) {}
     try { updateVehPill(); } catch (e) {}
   }
@@ -2509,20 +2609,27 @@ var L = (function () {
   var ZONE_R = 450;
   function buildZones(route, cams) {
     if (!route || !cams || !cams.length) return [];
-    var pts = route.pts, cum = route.cum, out = [], lastS = -9999;
-    for (var c = 0; c < cams.length; c++) {
+    var pts = route.pts, cum = route.cum, hits = [], i, c;
+    var step = pts.length > 3000 ? 3 : 1;              /* on échantillonne sans rater d'appareil */
+    for (c = 0; c < cams.length; c++) {
       var best = -1, bestD = 1e9;
-      for (var i = 0; i < pts.length; i += 4) {
+      for (i = 0; i < pts.length; i += step) {
         var d = haversine(cams[c], pts[i]);
         if (d < bestD) { bestD = d; best = i; }
       }
-      if (best < 0 || bestD > 120) continue;          /* pas sur ce trajet */
-      var sp = cum[best];
-      if (sp - lastS < 120) continue;                 /* deux appareils au même endroit */
-      lastS = sp;
-      out.push({ lat: cams[c][0], lon: cams[c][1], s: sp,
-                 from: Math.max(0, sp - ZONE_R), to: Math.min(route.length, sp + ZONE_R) });
+      if (best < 0 || bestD > 150) continue;           /* pas sur ce trajet */
+      hits.push({ lat: cams[c][0], lon: cams[c][1], s: cum[best], d: bestD });
     }
+    /* les appareils ne sont pas triés dans le fichier : on trie par distance
+       parcourue AVANT de regrouper, sinon on en perd la plupart */
+    hits.sort(function (a, b) { return a.s - b.s; });
+    var out = [], lastS = -1e9;
+    hits.forEach(function (h) {
+      if (h.s - lastS < 120) return;                   /* deux appareils au même endroit */
+      lastS = h.s;
+      out.push({ lat: h.lat, lon: h.lon, s: h.s,
+                 from: Math.max(0, h.s - ZONE_R), to: Math.min(route.length, h.s + ZONE_R) });
+    });
     return out;
   }
 
@@ -2538,6 +2645,7 @@ var L = (function () {
   }
 
   function zonesForRoute() {
+    if (!state.prefs.zones) { zones.list = []; clearZoneLayers(); hideZoneChip(); return; }
     var r = state.routes[state.sel];
     zones.list = []; zones.ready = false; zones.said = {};
     hideZoneChip(); clearZoneLayers();
@@ -2565,12 +2673,20 @@ var L = (function () {
   function hideZoneChip() {
     var c = document.getElementById('zonechip');
     if (c) c.hidden = true;
+    setZoneBar(0);
   }
-  function showZoneChip(txt) {
-    var c = document.getElementById('zonechip'), t = document.getElementById('zonechip-txt');
+  function showZoneChip(txt, withBar) {
+    var c = document.getElementById('zonechip'), t = document.getElementById('zonechip-txt'),
+        b = document.getElementById('zonechip-bar'), f = document.getElementById('zonechip-fill');
     if (!c) return;
     if (t) t.textContent = txt;
+    if (b) b.hidden = !withBar;
+    if (!withBar && f) f.style.width = '0%';
     c.hidden = false;
+  }
+  function setZoneBar(pct) {
+    var f = document.getElementById('zonechip-fill');
+    if (f) f.style.width = Math.round(pct) + '%';
   }
   function clearZoneLayers() {
     zones.layers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
@@ -2580,30 +2696,34 @@ var L = (function () {
 
   function drawZoneLayers() {
     clearZoneLayers();
-    if (!zones.list.length) return;
+    if (!state.prefs.zones || !zones.list.length) return;
     /* de trop loin, les cercles se réduisent à des points : on ne les affiche pas */
     if (map.getZoom() < 9) return;
-    var r = state.route || state.routes[state.sel];
-    if (!r) return;
-    zones.list.forEach(function (z) {
-      zones.layers.push(L.polygon(circleRing(z.lat, z.lon, ZONE_R), {
-        color: '#f59e0b', weight: 3, fillOpacity: 0.15, opacity: 0.95,
-        dashArray: [2.4, 2], interactive: false
-      }).addTo(map));
 
-      /* le triangle se pose sur le BORD du cercle, perpendiculairement à la route :
-         il désigne la zone, pas l'appareil */
-      var i = 0;
-      while (i < r.cum.length - 1 && r.cum[i] < z.s) i++;
-      var a = r.pts[Math.max(0, i - 2)], b = r.pts[Math.min(r.pts.length - 1, i + 2)];
-      var dLat = b[0] - a[0], dLon = b[1] - a[1], n = Math.hypot(dLat, dLon) || 1;
-      var off = (ZONE_R * 0.92) / 111320;
-      var mLat = z.lat + (dLon / n) * off;
-      var mLon = z.lon - (dLat / n) * off / Math.cos(z.lat * Math.PI / 180);
-      zones.markers.push(L.marker([mLat, mLon], {
+    /* trois anneaux, du plus clair (extérieur) au plus foncé (centre) */
+    var BANDS = [
+      { r: ZONE_R,        color: '#ffe0bb', opacity: 0.55, ring: true  },
+      { r: ZONE_R * 0.70, color: '#f6a94e', opacity: 0.50, ring: false },
+      { r: ZONE_R * 0.38, color: '#de6a1e', opacity: 0.55, ring: false }
+    ];
+
+    var zz = map.getZoom();
+    var fade = zz >= 15.2 ? 0.45 : (zz >= 14.2 ? 0.75 : 1);   /* de près, le fond reste lisible */
+
+    zones.list.forEach(function (z) {
+      BANDS.forEach(function (b, i) {
+        zones.layers.push(L.polygon(circleRing(z.lat, z.lon, b.r), {
+          color: b.color, weight: b.ring ? 2.6 : 1.6, fillOpacity: b.opacity * fade,
+          opacity: b.ring ? 0.95 : 0.55, dashArray: b.ring ? [2.4, 2] : null,
+          interactive: false
+        }).addTo(map));
+      });
+
+      /* le triangle est au CENTRE du cercle */
+      zones.markers.push(L.marker([z.lat, z.lon], {
         icon: L.divIcon({
-          className: '', iconSize: [26, 26], iconAnchor: [13, 13],
-          html: '<div class="ztri"><svg viewBox="0 0 24 24"><path d="M12 3.6l8.4 15H3.6z" fill="#fde68a" stroke="#b45309" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v3.6" stroke="#92400e" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15.6" r=".95" fill="#92400e"/></svg></div>'
+          className: '', iconSize: [30, 30], iconAnchor: [15, 15],
+          html: '<div class="ztri"><span class="ztri-b"><svg viewBox="0 0 24 24"><path d="M12 3.6l8.4 14.8H3.6z" fill="#f97316" stroke="#7c2d12" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9.2v3.4" stroke="#fff7ed" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="15.2" r="1.05" fill="#fff7ed"/></svg></span></div>'
         }),
         interactive: false, keyboard: false
       }).addTo(map));
@@ -2612,6 +2732,7 @@ var L = (function () {
 
   /* annonces pendant le guidage : jamais la position exacte, seulement le tronçon */
   function zoneTick() {
+    if (!state.prefs.zones) return;
     if (!zones.ready || !zones.list.length || !state.route) return;
     var t = state.traveled, inside = null, next = null;
     zones.list.forEach(function (z, i) {
@@ -2622,12 +2743,15 @@ var L = (function () {
       var rest = Math.max(0, inside.z.to - t);
       showZoneChip('Zone de danger · encore ' +
         (rest > 950 ? (Math.round(rest / 100) / 10).toString().replace('.', ',') + ' km'
-                    : Math.round(rest / 10) * 10 + ' m'));
+                    : Math.round(rest / 10) * 10 + ' m'), true);
+      /* la barre va de l'entrée (0 %) à la sortie (100 %) */
+      var span = Math.max(1, inside.z.to - inside.z.from);
+      setZoneBar(((t - inside.z.from) / span) * 100);
       if (!zones.said['in' + inside.i]) {
         zones.said['in' + inside.i] = true;
         speak('Vous entrez dans une zone de danger.');
       }
-    } else if (next && (next.z.from - t) <= 2000) {
+    } else if (next && (next.z.from - t) <= (state.prefs.zoneWarn || 2000)) {
       var d = next.z.from - t;
       showZoneChip('Zone de danger dans ' + (d > 950 ? (Math.round(d / 100) / 10).toString().replace('.', ',') + ' km'
                                                      : Math.round(d / 10) * 10 + ' m'));
@@ -3368,6 +3492,13 @@ var L = (function () {
       b.setAttribute('aria-pressed', String(b.dataset.costing === state.prefs.costing));
     });
     document.getElementById('sw-voice').setAttribute('aria-pressed', String(state.prefs.voice));
+    var zSw = document.getElementById('sw-zones');
+    if (zSw) zSw.setAttribute('aria-pressed', String(state.prefs.zones !== false));
+    var zWarn = state.prefs.zoneWarn || 2000;
+    Array.prototype.forEach.call(document.querySelectorAll('#seg-warn button'), function (b) {
+      b.setAttribute('aria-pressed', String(Number(b.dataset.warn) === zWarn));
+    });
+    try { setShowMenu(); } catch (e) {}
     var sr = document.getElementById('sw-rally');
     if (sr) sr.setAttribute('aria-pressed', String(state.prefs.rally));
     var hint = document.getElementById('plan-hint');
@@ -3417,12 +3548,61 @@ var L = (function () {
     });
   });
 
+  /* ---------- paramètres : menu à deux niveaux ---------- */
+  var setMenu = document.getElementById('set-menu');
+  var setPanels = document.getElementById('set-panels');
+  var setTitle = document.getElementById('ovl-title');
+  var setBack = document.getElementById('ovl-back');
+  var SET_TITLES = { general: 'Général', map: 'Affichage de la carte', sound: 'Voix et son',
+                     nav: 'Navigation', vehicle: 'Infos sur le véhicule', alerts: 'Alertes',
+                     rally: 'Mode rallye', data: 'Données', about: 'À propos' };
+  function setShowMenu() {
+    if (!setMenu) return;
+    setPanels.hidden = true; setMenu.hidden = false; setBack.hidden = true;
+    setTitle.textContent = 'Paramètres';
+    var card = document.querySelector('.ovl-card'); if (card) card.scrollTop = 0;
+  }
+  function setShowPanel(id) {
+    if (!setMenu) return;
+    Array.prototype.forEach.call(setPanels.querySelectorAll('.set-panel'), function (p) {
+      p.classList.toggle('on', p.dataset.panel === id);
+    });
+    setMenu.hidden = true; setPanels.hidden = false; setBack.hidden = false;
+    setTitle.textContent = SET_TITLES[id] || 'Paramètres';
+    var card = document.querySelector('.ovl-card'); if (card) card.scrollTop = 0;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.set-row'), function (r) {
+    r.addEventListener('click', function () { setShowPanel(r.dataset.panel); });
+  });
+  if (setBack) setBack.addEventListener('click', setShowMenu);
+
   Array.prototype.forEach.call(document.querySelectorAll('#seg-theme button'), function (b) {
     b.addEventListener('click', function () {
       state.prefs.theme = b.dataset.theme;
       savePrefs();
       applyTheme();
       toast(b.dataset.theme === 'night' ? 'Mode nuit' : b.dataset.theme === 'day' ? 'Mode jour' : 'Thème automatique');
+    });
+  });
+
+  /* alertes : zones de danger et distance d'annonce */
+  var swZones = document.getElementById('sw-zones');
+  if (swZones) swZones.addEventListener('click', function () {
+    state.prefs.zones = !state.prefs.zones;
+    swZones.setAttribute('aria-pressed', String(state.prefs.zones));
+    savePrefs();
+    if (!state.prefs.zones) { clearZoneLayers(); hideZoneChip(); zones.said = {}; }
+    else { try { zonesForRoute(); } catch (e) {} }
+    toast(state.prefs.zones ? 'Zones de danger affichées' : 'Zones de danger masquées');
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#seg-warn button'), function (b) {
+    b.addEventListener('click', function () {
+      state.prefs.zoneWarn = Number(b.dataset.warn);
+      Array.prototype.forEach.call(document.querySelectorAll('#seg-warn button'), function (o) {
+        o.setAttribute('aria-pressed', String(o === b));
+      });
+      savePrefs();
+      toast('Alerte ' + (state.prefs.zoneWarn === 2000 ? '2 km' : '1 km') + ' avant la zone');
     });
   });
 
@@ -3528,7 +3708,7 @@ var L = (function () {
 
   function fitPhone() {
     var phone = document.querySelector('.phone');
-    if (window.innerWidth <= 560) { phone.classList.remove('noscale'); return; }
+    if (window.innerWidth <= 560 || window.innerHeight <= 560) { phone.classList.remove('noscale'); return; }
     var k = Math.min(1, (window.innerHeight - 32) / 860, (window.innerWidth - 32) / 400);
     document.documentElement.style.setProperty('--scale', k.toFixed(3));
     phone.classList.toggle('noscale', k >= 0.999);
@@ -3539,6 +3719,17 @@ var L = (function () {
   state.recents = loadRecents();
   loadPrefs();
   document.getElementById('sw-voice').setAttribute('aria-pressed', String(state.prefs.voice));
+  var zs0 = document.getElementById('sw-zones');
+  if (zs0) zs0.setAttribute('aria-pressed', String(state.prefs.zones !== false));
+  Array.prototype.forEach.call(document.querySelectorAll('#seg-warn button'), function (b) {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.warn) === (state.prefs.zoneWarn || 2000)));
+  });
+  var zSw = document.getElementById('sw-zones');
+  if (zSw) zSw.setAttribute('aria-pressed', String(state.prefs.zones !== false));
+  var zWarn = state.prefs.zoneWarn || 2000;
+  Array.prototype.forEach.call(document.querySelectorAll('#seg-warn button'), function (b) {
+    b.setAttribute('aria-pressed', String(Number(b.dataset.warn) === zWarn));
+  });
   renderHome();
   locate();
   sizeMap(true);
