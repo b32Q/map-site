@@ -1781,8 +1781,13 @@ var L = (function () {
     });
 
     var osrm = osrmRoute(from, to, extra).then(function (r) { return [r]; }).catch(function () { return []; });
-    var brProf = (extra && extra.costing) === 'bicycle' ? 'trekking' : 'hiking-beta';
-    var bro = brouterRoute(from, to, brProf).then(function (r) { return [r]; }).catch(function () { return []; });
+    /* deux profils BRouter : randonnée (sentiers) et « le plus court » (mélange
+       routes + chemins sans détour). C'est ce mélange qui donne le meilleur trajet. */
+    var bike = (extra && extra.costing) === 'bicycle';
+    var bro = Promise.all([
+      brouterRoute(from, to, bike ? 'trekking' : 'hiking-beta').catch(function () { return null; }),
+      brouterRoute(from, to, bike ? 'fastbike' : 'shortest').catch(function () { return null; })
+    ]).then(function (l) { return l.filter(Boolean); });
 
     return Promise.all([valh, osrm, bro]).then(function (both) {
       var all = both[0].concat(both[1]).concat(both[2]);
@@ -3012,8 +3017,15 @@ var L = (function () {
     return ring;
   }
 
+  function zonesApply() {
+    /* à pied, les appareils automatiques ne concernent pas l'utilisateur */
+    return state.prefs.costing !== 'pedestrian';
+  }
+
   function zonesForRoute() {
-    if (!state.prefs.zones) { zones.list = []; clearZoneLayers(); hideZoneChip(); return; }
+    if (!state.prefs.zones || !zonesApply()) {
+      zones.list = []; clearZoneLayers(); hideZoneChip(); return;
+    }
     var r = state.routes[state.sel];
     zones.list = []; zones.ready = false; zones.said = {};
     hideZoneChip(); clearZoneLayers();
@@ -3086,7 +3098,7 @@ var L = (function () {
   /* un seul halo dégradé par zone : plus foncé au centre, transparent sur le bord */
   function drawZoneLayers() {
     clearZoneLayers();
-    if (!state.prefs.zones || !zones.list.length) return;
+    if (!state.prefs.zones || !zonesApply() || !zones.list.length) return;
     if (map.getZoom() < 9) return;                       /* de loin, ce ne sont que des points */
 
     var latSum = 0;
@@ -3153,7 +3165,7 @@ var L = (function () {
 
   /* annonces pendant le guidage : jamais la position exacte, seulement le tronçon */
   function zoneTick() {
-    if (!state.prefs.zones) return;
+    if (!state.prefs.zones || !zonesApply()) return;
     if (!zones.ready || !zones.list.length || !state.route) return;
     var t = state.traveled, inside = null, next = null;
     zones.list.forEach(function (z, i) {
@@ -3958,6 +3970,7 @@ var L = (function () {
           });
           updateVehPill();
           renderAvoids();
+          try { zonesForRoute(); } catch (e) {}
           toast(mode === 'auto' ? 'Itinéraires en voiture' : mode === 'bicycle' ? 'Itinéraires à vélo' : 'Itinéraires à pied');
           if (state.dest) recompute();
         });
@@ -4027,6 +4040,7 @@ var L = (function () {
       savePrefs();
       renderAvoids();
       try { updateVehPill(); } catch (e) {}
+      try { zonesForRoute(); } catch (e) {}
       recompute();
     });
   });
