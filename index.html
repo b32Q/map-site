@@ -1705,6 +1705,44 @@ var L = (function () {
       return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
   }
 
+  /* Trajet « dirigé » : on impose des points intermédiaires alignés sur la ligne
+     droite. Le moteur est alors obligé d'emprunter les sentiers qui longent ce
+     couloir, au lieu de partir se promener sur la route. Utilisé seulement quand
+     le meilleur trajet trouvé est beaucoup plus long que la ligne droite. */
+  function brouterDirect(from, to, profile, ratio) {
+    var n = 3, pts = [];
+    for (var i = 1; i <= n; i++) {
+      var f = i / (n + 1);
+      pts.push([from.lat + (to.lat - from.lat) * f, from.lon + (to.lon - from.lon) * f]);
+    }
+    var all = [[from.lat, from.lon]].concat(pts).concat([[to.lat, to.lon]]);
+    var url = 'https://brouter.de/brouter?lonlats=' + all.map(function (p) {
+      return p[1] + ',' + p[0];
+    }).join('|') + '&profile=' + profile + '&alternativeidx=0&format=geojson';
+    return fetchTimeout(url, null, 12000).then(function (r) {
+      if (!r.ok) throw new Error('brouter ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var f = (d.features || [])[0];
+      if (!f || !f.geometry) throw new Error('vide');
+      var co = f.geometry.coordinates;
+      var p2 = co.map(function (c) { return [c[1], c[0]]; });
+      var cum = [0];
+      for (var i = 1; i < p2.length; i++) cum.push(cum[i - 1] + haversine(p2[i - 1], p2[i]));
+      var steps = [], lastAt = -999;
+      for (var k = 2; k < p2.length - 2; k++) {
+        if (cum[k] - lastAt < 45) continue;
+        var b1 = bearing(p2[k - 2], p2[k]), b2 = bearing(p2[k], p2[k + 2]);
+        var turn = ((b2 - b1 + 540) % 360) - 180;
+        if (Math.abs(turn) < 38) continue;
+        steps.push({ text: 'Tournez ' + (turn > 0 ? 'à droite' : 'à gauche'), at: cum[k], type: turn > 0 ? 20 : 19, street: '' });
+        lastAt = cum[k];
+      }
+      var length = cum[cum.length - 1];
+      return { pts: p2, cum: cum, length: length, time: length / 1.25, steps: steps, main: '', engine: 'brouter-direct', ratio: ratio };
+    });
+  }
+
   /* BRouter (brouter.de) : moteur libre réglé pour les sentiers. Son profil
      « hiking-beta » (à pied) et « trekking » (à vélo) emprunte les chemins de terre,
      les layons et les traversées de champ que les moteurs routiers évitent.
@@ -1784,6 +1822,7 @@ var L = (function () {
     /* deux profils BRouter : randonnée (sentiers) et « le plus court » (mélange
        routes + chemins sans détour). C'est ce mélange qui donne le meilleur trajet. */
     var bike = (extra && extra.costing) === 'bicycle';
+    var brProf = bike ? 'trekking' : 'hiking-beta';
     var bro = Promise.all([
       brouterRoute(from, to, bike ? 'trekking' : 'hiking-beta').catch(function () { return null; }),
       brouterRoute(from, to, bike ? 'fastbike' : 'shortest').catch(function () { return null; })
@@ -1791,16 +1830,29 @@ var L = (function () {
 
     return Promise.all([valh, osrm, bro]).then(function (both) {
       var all = both[0].concat(both[1]).concat(both[2]);
-      /* on ne garde que les trajets vraiment différents (200 m et 1 min d'écart) */
-      var keep = [];
-      all.sort(function (a, b) { return a.time - b.time; });
-      all.forEach(function (r) {
-        var same = keep.some(function (k) {
-          return Math.abs(k.length - r.length) < 200 && Math.abs(k.time - r.time) < 60;
+
+      function dedupe(list) {
+        var keep = [];
+        list.sort(function (a, b) { return a.length - b.length; });
+        list.forEach(function (r) {
+          var same = keep.some(function (k) {
+            return Math.abs(k.length - r.length) < 200 && Math.abs(k.time - r.time) < 60;
+          });
+          if (!same) keep.push(r);
         });
-        if (!same) keep.push(r);
-      });
-      return keep.slice(0, 3);
+        return keep.slice(0, 3);
+      }
+
+      /* si le meilleur trajet fait plus de 1,35 fois la ligne droite, on tente un
+         trajet « dirigé » qui longe la ligne droite et emprunte les sentiers */
+      var direct = haversine([from.lat, from.lon], [to.lat, to.lon]);
+      var best = all.reduce(function (m, r) { return (!m || r.length < m.length) ? r : m; }, null);
+      if (best && direct > 150 && best.length / direct > 1.35) {
+        return brouterDirect(from, to, brProf, best.length / direct)
+          .then(function (r) { all.push(r); return dedupe(all); })
+          .catch(function () { return dedupe(all); });
+      }
+      return dedupe(all);
     });
   }
 
@@ -2833,15 +2885,21 @@ var L = (function () {
         var same = keep.some(function (k) { return Math.abs(k.length - r.length) < 60 && Math.abs(k.time - r.time) < 40; });
         if (!same) keep.push(r);
       });
-      keep.sort(function (a, b) { return a.time - b.time; });
+      var walk = state.prefs.costing !== 'auto';
+      /* à pied et à vélo, « le meilleur » = le plus court en distance :
+         c'est là qu'on évite les détours par la route */
+      keep.sort(walk
+        ? function (a, b) { return a.length - b.length || a.time - b.time; }
+        : function (a, b) { return a.time - b.time; });
       if (keep.length > 1) {
-        var shortest = keep.reduce(function (m, r) { return r.length < m.length ? r : m; }, keep[0]);
         keep.forEach(function (r, i) {
-          if (i === 0) r.label = 'Le plus rapide';
-          else if (r === shortest) r.label = 'Le plus court';
+          if (i === 0) r.label = walk ? 'Le plus court' : 'Le plus rapide';
+          else if (!walk && r.length === keep[0].length) r.label = 'Le plus court';
           else if (r.label === 'À pied' || r.label === 'À vélo') r.label = 'Autre chemin';
-          else r.label = r.label.replace('Ton itinéraire', 'Plus long');
+          else r.label = r.label.replace('Ton itinéraire', 'Autre chemin');
         });
+      } else if (keep.length === 1 && walk) {
+        keep[0].label = 'Le plus court';
       }
       state.routes = keep;
       state.sel = 0;
