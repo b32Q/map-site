@@ -1001,7 +1001,10 @@ var L = (function () {
       padding: { top: tl[1], left: tl[0], bottom: br[1], right: br[0] },
       maxZoom: opts.maxZoom || 16,
       animate: !!opts.animate,
-      duration: opts.animate ? 450 : 0
+      duration: opts.animate ? 450 : 0,
+      /* on garde l'orientation choisie : recadrer ne doit pas remettre le nord en haut */
+      bearing: this.mb.getBearing(),
+      pitch: this.mb.getPitch()
     });
     return this;
   };
@@ -3447,6 +3450,9 @@ var L = (function () {
       map.setView(state.pos ? [state.pos.lat, state.pos.lon] : FRANCE, state.pos ? 15 : 5, { animate: true });
       toast(state.pos ? 'Recentré sur ta position' : 'Vue sur la France');
     }
+    /* recentrer remet aussi la carte dans le bon sens : nord en haut.
+       Placé après le déplacement : un saut de carte annulerait l'animation. */
+    try { if (typeof map.setBearing === 'function' && Math.abs(map.getBearing()) > 0.5) setBearing(0, false); } catch (e) {}
     updateRecenter();
   });
   updateRecenter();
