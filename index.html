@@ -414,6 +414,17 @@
   .rallytag{display:inline-flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;font-weight:700;
     letter-spacing:.02em;color:#92400e;background:#fef3c7;border-radius:999px;padding:4px 10px}
   .rallytag:before{content:"";width:6px;height:6px;border-radius:50%;background:#f59e0b}
+
+  /* ---------- zones de danger ---------- */
+  .zonechip{position:absolute;left:50%;transform:translateX(-50%);
+    top:calc(178px + env(safe-area-inset-top));z-index:930;
+    display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:999px;
+    background:#fff7ed;color:#9a3412;font-size:12.5px;font-weight:650;white-space:nowrap;
+    box-shadow:0 10px 24px -14px rgba(11,18,32,.5),0 0 0 1px rgba(154,52,18,.18)}
+  .zonechip[hidden]{display:none}
+  .zonechip svg{width:15px;height:15px;flex:none}
+  .ztri{filter:drop-shadow(0 2px 3px rgba(11,18,32,.28))}
+  .ztri svg{width:26px;height:26px;display:block}
 </style>
 </head>
 <body>
@@ -510,6 +521,11 @@
         <span class="rb-lbl">chrono</span>
       </div>
       <div class="rb-notes" id="rb-notes"></div>
+    </div>
+
+    <div class="zonechip" id="zonechip" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 17.2v.1"/></svg>
+      <span id="zonechip-txt">Zone de danger</span>
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -898,6 +914,53 @@ var L = (function () {
     };
   };
 
+  /* ---------------------------- polygone ------------------------------ */
+  function Polygon(pts, opts) {
+    this._id = 'pg' + (++seq);
+    this._src = 'src' + this._id;
+    this.pts = (pts || []).slice();
+    this.opts = opts || {};
+    this._added = false;
+  }
+  Polygon.prototype.addTo = function (m) { m.addLayer(this); return this; };
+  Polygon.prototype._install = function (mb) {
+    if (this._added) return;
+    var o = this.opts;
+    var ring = this.pts.map(function (p) { return Array.isArray(p) ? [p[1], p[0]] : [p.lng, p.lat]; });
+    if (ring.length && (ring[0][0] !== ring[ring.length-1][0] || ring[0][1] !== ring[ring.length-1][1])) ring.push(ring[0]);
+    mb.addSource(this._src, { type: 'geojson', data: { type:'Feature', geometry:{ type:'Polygon', coordinates:[ring] } } });
+    if (o.fill !== false) {
+      mb.addLayer({ id: this._id, type: 'fill', source: this._src,
+        paint: { 'fill-color': o.color || '#f59e0b', 'fill-opacity': o.fillOpacity === undefined ? 0.1 : o.fillOpacity } });
+    }
+    if (o.stroke !== false) {
+      mb.addLayer({ id: this._id + '-line', type: 'line', source: this._src,
+        paint: { 'line-color': o.color || '#f59e0b', 'line-width': o.weight || 1.6,
+                 'line-opacity': o.opacity === undefined ? 1 : o.opacity,
+                 'line-dasharray': o.dashArray || [2, 1.6] } });
+    }
+    this._added = true;
+  };
+  Polygon.prototype._remove = function (mb) {
+    if (!this._added) return;
+    try { if (mb.getLayer(this._id)) mb.removeLayer(this._id); } catch (e) {}
+    try { if (mb.getLayer(this._id + '-line')) mb.removeLayer(this._id + '-line'); } catch (e) {}
+    try { if (mb.getSource(this._src)) mb.removeSource(this._src); } catch (e) {}
+    this._added = false;
+  };
+  Polygon.prototype.setStyle = function () { return this; };
+  Polygon.prototype.redraw = function () { return this; };
+  Polygon.prototype.getBounds = function () {
+    var s = 90, n = -90, w = 180, e = -180;
+    this.pts.forEach(function (p) {
+      var q = llOf(p);
+      s = Math.min(s, q.lat); n = Math.max(n, q.lat);
+      w = Math.min(w, q.lng); e = Math.max(e, q.lng);
+    });
+    return { getSouth: function () { return s; }, getNorth: function () { return n; },
+             getWest: function () { return w; }, getEast: function () { return e; } };
+  };
+
   /* ----------------------------- marqueur ----------------------------- */
   function Marker(latlng, opts) {
     this._id = 'mk' + (++seq);
@@ -938,6 +1001,7 @@ var L = (function () {
     Map: MBMap,
     map: function (id, opts) { return new MBMap(id, opts); },
     polyline: function (pts, o) { return new Polyline(pts, o); },
+    polygon: function (pts, o) { return new Polygon(pts, o); },
     marker: function (ll, o) { return new Marker(ll, o); },
     divIcon: function (o) { return o; },
     canvas: function () { return null; },
@@ -1065,6 +1129,11 @@ var L = (function () {
   function applyRouteWeight() {
     /* de loin, les chevrons blancs sur le trait se lisent comme des pointillés */
     document.body.classList.toggle('lowzoom', map.getZoom() < 11);
+    var showZones = map.getZoom() >= 9;
+    if (showZones !== zones.shown) {
+      zones.shown = showZones;
+      try { showZones ? drawZoneLayers() : clearZoneLayers(); } catch (e) {}
+    }
     if (!routeLayer) return;
     var w = routeWeight(map.getZoom());
     routeLayer.setStyle({ weight: w });
@@ -1099,6 +1168,7 @@ var L = (function () {
     }).addTo(map);
     drawArrows(sel);
     try { applyRouteWeight(); } catch (e) {}
+    setTimeout(function () { try { zonesForRoute(); } catch (e) {} }, 120);
     updateGoogleBtn();
   }
 
@@ -2230,12 +2300,250 @@ var L = (function () {
   }
 
   function selectRoute(i) {
+    setTimeout(function () { try { zonesForRoute(); } catch (e) {} }, 60);
     state.sel = i;
     drawRoutes();
     renderRoutes();
   }
 
   /* ---------- guidage ---------- */
+  /* =========================================================================
+     ZONES DE DANGER — sur le modèle des applis de navigation françaises.
+     On ne signale JAMAIS un radar à sa position exacte : on regroupe les
+     appareils en tronçons d'environ 4 km et on annonce « zone de danger ».
+     Données : OpenStreetMap (points `highway=speed_camera`), mises en cache
+     une semaine sur le téléphone. Si le service ne répond pas, aucune alerte
+     n'est inventée : on se tait.
+     ========================================================================= */
+  var ZONE_KEY = 'nav_zones_v1', ZONE_TTL = 7 * 24 * 3600 * 1000;
+  var zones = { list: [], ready: false, busy: false, said: {}, layers: [], markers: [], cams: null };
+
+  function zoneCacheRead(key) {
+    try {
+      var all = JSON.parse(localStorage.getItem(ZONE_KEY) || '{}');
+      var e = all[key];
+      if (e && Date.now() - e.t < ZONE_TTL) return e.p;
+    } catch (err) {}
+    return null;
+  }
+  function zoneCacheWrite(key, pts) {
+    try {
+      var all = JSON.parse(localStorage.getItem(ZONE_KEY) || '{}');
+      all[key] = { t: Date.now(), p: pts };
+      localStorage.setItem(ZONE_KEY, JSON.stringify(all));
+    } catch (err) {}
+  }
+
+  /* Source des appareils : le jeu de données public « Radars automatiques »
+     (data.gouv.fr, Sécurité routière). Fichier statique, rapide, officiel.
+     En secours seulement : OpenStreetMap via Overpass (lent, souvent saturé).
+     Les points ne sont JAMAIS affichés : ils servent uniquement à délimiter
+     des tronçons de 4 km, et ne quittent pas la mémoire du téléphone. */
+  var RADAR_CSV = 'https://static.data.gouv.fr/resources/radars-automatiques/20181025-141231/radars.csv';
+  var OVERPASS = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter';
+
+  function parseRadarCsv(txt) {
+    var lines = txt.split(/\r?\n/), out = [], seen = {};
+    for (var i = 1; i < lines.length; i++) {
+      var l = lines[i];
+      if (!l) continue;
+      /* les champs texte peuvent contenir des virgules entre guillemets */
+      var cells = [], cur = '', q = false;
+      for (var c = 0; c < l.length; c++) {
+        var ch = l[c];
+        if (ch === '"') { q = !q; continue; }
+        if (ch === ',' && !q) { cells.push(cur); cur = ''; continue; }
+        cur += ch;
+      }
+      cells.push(cur);
+      var lat = parseFloat(cells[3]), lon = parseFloat(cells[4]);
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      var k = Math.round(lat * 2000) + ':' + Math.round(lon * 2000);   /* ~50 m */
+      if (seen[k]) continue;
+      seen[k] = 1;
+      out.push([lat, lon]);
+    }
+    return out;
+  }
+
+  function camerasFromOverpass(bbox) {
+    var q = '[out:json][timeout:25];node["highway"="speed_camera"](' +
+      bbox.join(',') + ');out body 4000;';
+    return fetchTimeout(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q)
+    }, 26000).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      return (d.elements || []).filter(function (e) { return e.lat && e.lon; })
+        .map(function (e) { return [e.lat, e.lon]; });
+    });
+  }
+
+  /* tous les appareils de France, une fois, puis en mémoire / cache local */
+  function allCameras() {
+    if (zones.cams) return Promise.resolve(zones.cams);
+    var saved = zoneCacheRead('fr');
+    if (saved && saved.length) { zones.cams = saved; return Promise.resolve(saved); }
+    return fetchTimeout(RADAR_CSV, null, 30000).then(function (r) {
+      if (!r.ok) throw new Error('csv ' + r.status);
+      return r.text();
+    }).then(function (txt) {
+      var pts = parseRadarCsv(txt);
+      if (!pts.length) throw new Error('csv vide');
+      zones.cams = pts;
+      zoneCacheWrite('fr', pts);
+      return pts;
+    }).catch(function () {
+      /* secours : OpenStreetMap sur la zone du trajet */
+      var r = state.routes[state.sel];
+      var lats = r.pts.map(function (p) { return p[0]; }), lons = r.pts.map(function (p) { return p[1]; });
+      var bbox = [Math.min.apply(null, lats) - 0.02, Math.min.apply(null, lons) - 0.02,
+                  Math.max.apply(null, lats) + 0.02, Math.max.apply(null, lons) + 0.02]
+                 .map(function (v) { return Math.round(v * 100) / 100; });
+      return camerasFromOverpass(bbox).then(function (pts) { zones.cams = pts; return pts; });
+    });
+  }
+
+  /* Chaque appareil devient un CERCLE de 450 m de rayon : la zone reste proche de
+     l'appareil, mais elle est assez large pour ne pas le désigner précisément.
+     L'alerte, elle, arrive 2 km avant le bord du cercle. */
+  var ZONE_R = 450;
+  function buildZones(route, cams) {
+    if (!route || !cams || !cams.length) return [];
+    var pts = route.pts, cum = route.cum, out = [], lastS = -9999;
+    for (var c = 0; c < cams.length; c++) {
+      var best = -1, bestD = 1e9;
+      for (var i = 0; i < pts.length; i += 4) {
+        var d = haversine(cams[c], pts[i]);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (best < 0 || bestD > 120) continue;          /* pas sur ce trajet */
+      var sp = cum[best];
+      if (sp - lastS < 120) continue;                 /* deux appareils au même endroit */
+      lastS = sp;
+      out.push({ lat: cams[c][0], lon: cams[c][1], s: sp,
+                 from: Math.max(0, sp - ZONE_R), to: Math.min(route.length, sp + ZONE_R) });
+    }
+    return out;
+  }
+
+  /* cercle approché par un polygone de 48 points */
+  function circleRing(lat, lon, r) {
+    var ring = [], n = 48;
+    for (var i = 0; i <= n; i++) {
+      var a = (i / n) * Math.PI * 2;
+      ring.push([lat + (r * Math.sin(a)) / 110540,
+                 lon + (r * Math.cos(a)) / (111320 * Math.cos(lat * Math.PI / 180))]);
+    }
+    return ring;
+  }
+
+  function zonesForRoute() {
+    var r = state.routes[state.sel];
+    zones.list = []; zones.ready = false; zones.said = {};
+    hideZoneChip(); clearZoneLayers();
+    if (!r || !r.pts || r.pts.length < 2) return;
+
+    var lats = r.pts.map(function (p) { return p[0]; }), lons = r.pts.map(function (p) { return p[1]; });
+    var s0 = Math.min.apply(null, lats) - 0.05, s1 = Math.max.apply(null, lats) + 0.05;
+    var w0 = Math.min.apply(null, lons) - 0.05, w1 = Math.max.apply(null, lons) + 0.05;
+
+    if (zones.busy) return;
+    zones.busy = true;
+    allCameras().then(function (all) {
+      zones.busy = false;
+      if (state.routes[state.sel] !== r) return;      /* trajet changé entre-temps */
+      var near = all.filter(function (c) { return c[0] > s0 && c[0] < s1 && c[1] > w0 && c[1] < w1; });
+      var t0 = Date.now();
+      zones.list = buildZones(r, near);
+      zones.ms = Date.now() - t0;
+      zones.near = near.length;
+      zones.ready = true;
+      drawZoneLayers();
+    }).catch(function () { zones.busy = false; });
+  }
+
+  function hideZoneChip() {
+    var c = document.getElementById('zonechip');
+    if (c) c.hidden = true;
+  }
+  function showZoneChip(txt) {
+    var c = document.getElementById('zonechip'), t = document.getElementById('zonechip-txt');
+    if (!c) return;
+    if (t) t.textContent = txt;
+    c.hidden = false;
+  }
+  function clearZoneLayers() {
+    zones.layers.forEach(function (l) { if (map.hasLayer(l)) map.removeLayer(l); });
+    zones.markers.forEach(function (m) { if (map.hasLayer(m)) map.removeLayer(m); });
+    zones.layers = []; zones.markers = [];
+  }
+
+  function drawZoneLayers() {
+    clearZoneLayers();
+    if (!zones.list.length) return;
+    /* de trop loin, les cercles se réduisent à des points : on ne les affiche pas */
+    if (map.getZoom() < 9) return;
+    var r = state.route || state.routes[state.sel];
+    if (!r) return;
+    zones.list.forEach(function (z) {
+      zones.layers.push(L.polygon(circleRing(z.lat, z.lon, ZONE_R), {
+        color: '#f59e0b', weight: 3, fillOpacity: 0.15, opacity: 0.95,
+        dashArray: [2.4, 2], interactive: false
+      }).addTo(map));
+
+      /* le triangle se pose sur le BORD du cercle, perpendiculairement à la route :
+         il désigne la zone, pas l'appareil */
+      var i = 0;
+      while (i < r.cum.length - 1 && r.cum[i] < z.s) i++;
+      var a = r.pts[Math.max(0, i - 2)], b = r.pts[Math.min(r.pts.length - 1, i + 2)];
+      var dLat = b[0] - a[0], dLon = b[1] - a[1], n = Math.hypot(dLat, dLon) || 1;
+      var off = (ZONE_R * 0.92) / 111320;
+      var mLat = z.lat + (dLon / n) * off;
+      var mLon = z.lon - (dLat / n) * off / Math.cos(z.lat * Math.PI / 180);
+      zones.markers.push(L.marker([mLat, mLon], {
+        icon: L.divIcon({
+          className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+          html: '<div class="ztri"><svg viewBox="0 0 24 24"><path d="M12 3.6l8.4 15H3.6z" fill="#fde68a" stroke="#b45309" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 9v3.6" stroke="#92400e" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15.6" r=".95" fill="#92400e"/></svg></div>'
+        }),
+        interactive: false, keyboard: false
+      }).addTo(map));
+    });
+  }
+
+  /* annonces pendant le guidage : jamais la position exacte, seulement le tronçon */
+  function zoneTick() {
+    if (!zones.ready || !zones.list.length || !state.route) return;
+    var t = state.traveled, inside = null, next = null;
+    zones.list.forEach(function (z, i) {
+      if (t >= z.from && t <= z.to) inside = { z: z, i: i };
+      else if (t < z.from && (!next || z.from < next.z.from)) next = { z: z, i: i };
+    });
+    if (inside) {
+      var rest = Math.max(0, inside.z.to - t);
+      showZoneChip('Zone de danger · encore ' +
+        (rest > 950 ? (Math.round(rest / 100) / 10).toString().replace('.', ',') + ' km'
+                    : Math.round(rest / 10) * 10 + ' m'));
+      if (!zones.said['in' + inside.i]) {
+        zones.said['in' + inside.i] = true;
+        speak('Vous entrez dans une zone de danger.');
+      }
+    } else if (next && (next.z.from - t) <= 2000) {
+      var d = next.z.from - t;
+      showZoneChip('Zone de danger dans ' + (d > 950 ? (Math.round(d / 100) / 10).toString().replace('.', ',') + ' km'
+                                                     : Math.round(d / 10) * 10 + ' m'));
+      if (!zones.said['pre' + next.i]) {
+        zones.said['pre' + next.i] = true;
+        speak('Zone de danger dans ' + (d > 1200 ? '2 kilomètres' : '1 kilomètre') + '.');
+      }
+    } else {
+      hideZoneChip();
+    }
+  }
+
   /* =========================================================================
      MODE RALLYE — compte à rebours, notes du copilote, chrono pur.
      Activé depuis les Paramètres (section Rallye) : le prochain trajet démarre
@@ -2452,6 +2760,7 @@ var L = (function () {
 
   function stopNav() {
     try { rallyStop(); } catch (e) {}
+    try { hideZoneChip(); clearZoneLayers(); } catch (e) {}
     closeOpts();
     if (typeof closeReportMenu === 'function') closeReportMenu();
     stopWatch();
@@ -2650,13 +2959,14 @@ var L = (function () {
       }
       updateGuidance();
       if (rally.on) rallyTick();
+      try { zoneTick(); } catch (e) {}
       if (live && state.traveled >= state.route.length - 8) { state.playing = false; arrive(); }
     }
     requestAnimationFrame(loop);
   }
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; } };
   }
   requestAnimationFrame(loop);
 
