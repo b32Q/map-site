@@ -425,6 +425,42 @@
   .zonechip svg{width:15px;height:15px;flex:none}
   .ztri{filter:drop-shadow(0 2px 3px rgba(11,18,32,.28))}
   .ztri svg{width:26px;height:26px;display:block}
+
+  /* ---------- mode nuit ---------- */
+  body.night{
+    --text:#e7ecf3;--muted:#9aa5b4;--line:rgba(255,255,255,.12);--sheet:#12171f;
+    --chip:#1b222c;--go:#12b76a;--go-deep:#34d399;
+  }
+  body.night .screen,body.night .phone{background:#0b0f14}
+  body.night .search,body.night .menubtn,body.night .fab{background:#1b222c;color:#e7ecf3;
+    box-shadow:0 10px 24px -14px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08)}
+  body.night .sheet{background:#12171f;box-shadow:0 -18px 40px -22px rgba(0,0,0,.95)}
+  body.night .sheet .search{background:#1b222c;color:#e7ecf3}
+  body.night .sugg{background:#151b24;border-color:rgba(255,255,255,.10)}
+  body.night .sugg button:hover{background:#1b222c}
+  body.night .rcard{background:#151b24;border-color:rgba(255,255,255,.10)}
+  body.night .rcard.sel{background:#16202e;border-color:var(--blue)}
+  body.night .shortcut{background:#1b222c;color:#e7ecf3}
+  body.night .shortcut .ico{background:#232b36}
+  body.night .shortcut.new{background:#16202e;color:#8fb0ff}
+  body.night .deprow,body.night .fav{border-color:rgba(255,255,255,.10)}
+  body.night .dep-ico{background:#16202e;color:#8fb0ff}
+  body.night .chipbtn,body.night .ghost,body.night .plain{background:#1b222c;color:#cbd5e1}
+  body.night .ovl{background:rgba(0,0,0,.62)}
+  body.night .ovl-card{background:#12171f}
+  body.night .ovl-head{background:#12171f}
+  body.night .set-card{background:#171d26}
+  body.night .set-card .row{border-color:rgba(255,255,255,.08)}
+  body.night .seg{background:#1b222c}
+  body.night .seg button[aria-pressed="true"]{background:#2a3441;color:#fff}
+  body.night .sw{background:#2a3441}
+  body.night .sw[aria-pressed="true"]{background:var(--blue)}
+  body.night .navbar{background:#12171f;color:#e7ecf3}
+  body.night .hud{background:#12171f;color:#e7ecf3}
+  body.night .rallybar{background:rgba(10,13,18,.95)}
+  body.night .zonechip{background:#2a1d0d;color:#fbbf24;box-shadow:0 0 0 1px rgba(251,191,36,.25)}
+  body.night .planinput{background:#1b222c;color:#e7ecf3}
+  body.night .linkbtn{color:#9aa5b4}
 </style>
 </head>
 <body>
@@ -623,6 +659,22 @@
           </div>
         </div>
 
+        <p class="sec-title">Affichage</p>
+        <div class="seg" id="seg-theme">
+          <button type="button" data-theme="auto" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="8.6"/><path d="M12 3.4a8.6 8.6 0 010 17.2z" fill="currentColor" stroke="none"/></svg>
+            Auto
+          </button>
+          <button type="button" data-theme="day" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" style="width:16px;height:16px"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.4M12 19v2.4M2.6 12H5M19 12h2.4M5.2 5.2l1.7 1.7M17.1 17.1l1.7 1.7M18.8 5.2l-1.7 1.7M6.9 17.1l-1.7 1.7"/></svg>
+            Jour
+          </button>
+          <button type="button" data-theme="night" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M20.5 14.6A8.6 8.6 0 019.4 3.5a8.6 8.6 0 1011.1 11.1z"/></svg>
+            Nuit
+          </button>
+        </div>
+
         <p class="sec-title">À propos</p>
         <div class="set-card about">
           <div class="row"><span class="lab">Carte<span class="hint">OpenFreeMap · données OpenStreetMap</span></span></div>
@@ -675,9 +727,47 @@ var L = (function () {
   }
 
   /* ---------- style « GPS » : contraste net, sans agresser ---------- */
-  function palette(mb) {
+  function palette(mb, night) {
     function set(id, prop, val) { if (mb.getLayer(id)) mb.setPaintProperty(id, prop, val); }
     function setL(id, prop, val) { if (mb.getLayer(id)) mb.setLayoutProperty(id, prop, val); }
+
+    if (night) {
+      /* palette de nuit : fond très sombre, routes lisibles, étiquettes claires */
+      set('background', 'background-color', '#0e131a');
+      set('park', 'fill-color', '#16251c');
+      set('landcover_wood', 'fill-color', '#14231b');
+      set('landcover_grass', 'fill-color', '#17251d');
+      set('landuse_residential', 'fill-color', '#141a22');
+      set('water', 'fill-color', '#0b1a2a');
+      set('waterway', 'line-color', '#0b1a2a');
+      set('building', 'fill-color', '#1a212b');
+      set('building', 'fill-outline-color', '#232c38');
+      set('highway_minor', 'line-color', '#2b3542');
+      set('highway_major_casing', 'line-color', '#39434f');
+      set('highway_major_inner', 'line-color', '#38424f');
+      set('highway_motorway_casing', 'line-color', '#4a5563');
+      set('highway_motorway_inner', 'line-color', '#4e5a69');
+      set('highway_motorway_subtle', 'line-color', '#4e5a69');
+      set('railway', 'line-color', '#2a333f');
+      set('railway_dashline', 'line-color', '#0e131a');
+      set('boundary_3', 'line-color', '#2b3441');
+      var frN = ['coalesce', ['get', 'name:fr'], ['get', 'name']];
+      ['label_city', 'label_city_capital', 'label_town', 'label_village', 'label_other',
+       'label_state', 'label_country', 'label_country_1', 'label_country_2', 'label_country_3',
+       'water_name_point_label', 'water_name_line_label',
+       'highway-name-major', 'highway-name-minor', 'highway-name-path'].forEach(function (id) {
+        if (!mb.getLayer(id)) return;
+        mb.setPaintProperty(id, 'text-color', '#dbe2ec');
+        mb.setPaintProperty(id, 'text-halo-color', '#0a0e13');
+        mb.setPaintProperty(id, 'text-halo-width', 1.6);
+        mb.setLayoutProperty(id, 'text-field', frN);
+      });
+      ['poi_z16', 'poi_z15', 'poi_z14', 'poi-transit', 'airport'].forEach(function (id) {
+        if (mb.getLayer(id)) mb.setLayoutProperty(id, 'visibility', 'none');
+      });
+      return;
+    }
+
     set('background', 'background-color', '#eaedf1');
     set('park', 'fill-color', '#cfe7bd');
     set('landcover_wood', 'fill-color', '#c5dfb2');
@@ -751,7 +841,7 @@ var L = (function () {
 
     this.mb.on('load', function () {
       self._ready = true;
-      try { palette(self.mb); } catch (e) {}
+      try { palette(self.mb, self._night); } catch (e) {}
       self._pending.splice(0).forEach(function (l) { l._install(self.mb); });
       self._fire('load');
     });
@@ -823,6 +913,11 @@ var L = (function () {
     return this;
   };
   MBMap.prototype.getContainer = function () { return this.mb.getContainer(); };
+  MBMap.prototype.setNight = function (on) {
+    this._night = !!on;
+    if (this._ready) { try { palette(this.mb, this._night); } catch (e) {} }
+    return this;
+  };
   MBMap.prototype.invalidateSize = function () { this.mb.resize(); return this; };
   MBMap.prototype.setBearing = function (deg, o) {
     this.mb.easeTo({ bearing: deg, duration: (o && o.animate === false) ? 0 : 300 });
@@ -1029,6 +1124,7 @@ var L = (function () {
         if (typeof p[k] === 'boolean') state.prefs[k] = p[k];
       });
       if (p.costing === 'auto' || p.costing === 'bicycle' || p.costing === 'pedestrian') state.prefs.costing = p.costing;
+      if (p.theme === 'auto' || p.theme === 'day' || p.theme === 'night') state.prefs.theme = p.theme;
     } catch (e) {}
   }
   function savePrefs() {
@@ -1040,7 +1136,7 @@ var L = (function () {
     phase: 'home', dest: null, routes: [], sel: 0, route: null,
     traveled: 0, playing: false, following: false, navigating: false, arrived: false,
     speedFactor: 1, lastStep: -1,
-    prefs: { costing: 'auto', tolls: false, highways: false, ferry: false, tracks: false, voice: VOICE_OK, rally: false },
+    prefs: { costing: 'auto', tolls: false, highways: false, ferry: false, tracks: false, voice: VOICE_OK, rally: false, theme: 'auto' },
     planTs: null,
     pos: null, posLabel: '', posDenied: false, centered: false, pickMode: 'dest', geoError: 0,
     fix: null, gpsLive: false, gpsWatch: null, ri: 0, lastReroute: 0, offCount: 0,
@@ -2964,9 +3060,11 @@ var L = (function () {
     }
     requestAnimationFrame(loop);
   }
+  try { applyTheme(); } catch (e) {}
+
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; } };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme };
   }
   requestAnimationFrame(loop);
 
@@ -3173,6 +3271,28 @@ var L = (function () {
   if (document.getElementById('gear')) document.getElementById('gear').addEventListener('click', openOpts);
   document.getElementById('menu').addEventListener('click', openOpts);
 
+  /* ---------- affichage : jour / nuit ---------- */
+  function nightNow() {
+    var h = new Date().getHours();
+    return h >= 21 || h < 7;          /* nuit entre 21 h et 7 h */
+  }
+  function wantedNight() {
+    if (state.prefs.theme === 'night') return true;
+    if (state.prefs.theme === 'day') return false;
+    return nightNow();
+  }
+  function applyTheme() {
+    var night = wantedNight();
+    document.body.classList.toggle('night', night);
+    try { if (window.__map && window.__map.setNight) window.__map.setNight(night); } catch (e) {}
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', night ? '#0b0f14' : '#0d0f13');
+    Array.prototype.forEach.call(document.querySelectorAll('#seg-theme button'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.theme === state.prefs.theme));
+    });
+  }
+  setInterval(applyTheme, 60000);
+
   /* ---------- options ---------- */
   var AVOIDS = [
     { key: 'tolls', label: 'Éviter les péages', hint: 'routes à péage' },
@@ -3294,6 +3414,15 @@ var L = (function () {
       renderAvoids();
       try { updateVehPill(); } catch (e) {}
       recompute();
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('#seg-theme button'), function (b) {
+    b.addEventListener('click', function () {
+      state.prefs.theme = b.dataset.theme;
+      savePrefs();
+      applyTheme();
+      toast(b.dataset.theme === 'night' ? 'Mode nuit' : b.dataset.theme === 'day' ? 'Mode jour' : 'Thème automatique');
     });
   });
 
