@@ -844,6 +844,35 @@ var L = (function () {
     };
   }
 
+  /* ---------- fond Google Maps (tuiles raster, sans clé) ---------- */
+  var GBASE = 'gbase';
+  function googleBase(mb, night) {
+    if (!mb.getSource(GBASE)) {
+      var urls = [0, 1, 2, 3].map(function (i) {
+        return 'https://mt' + i + '.google.com/vt/lyrs=m&hl=fr&gl=fr&scale=2&x={x}&y={y}&z={z}';
+      });
+      mb.addSource(GBASE, {
+        type: 'raster', tiles: urls, tileSize: 256, maxzoom: 20,
+        attribution: '© Google'
+      });
+      var first = mb.getStyle().layers[0].id;
+      mb.addLayer({ id: GBASE, type: 'raster', source: GBASE,
+        paint: { 'raster-opacity': 1 } }, first);
+    }
+    /* le style vectoriel sert de secours : on le masque quand Google est affiché */
+    mb.getStyle().layers.forEach(function (l) {
+      if (l.id === GBASE) return;
+      if (/^(pl|pg|zone|route|jam|arrow)/.test(l.id)) return;   /* nos tracés restent */
+      try { mb.setLayoutProperty(l.id, 'visibility', 'none'); } catch (e) {}
+    });
+    /* la nuit, on assombrit les tuiles (pas de fond sombre officiel) */
+    try {
+      mb.setPaintProperty(GBASE, 'raster-brightness-max', night ? 0.55 : 1);
+      mb.setPaintProperty(GBASE, 'raster-saturation', night ? -0.35 : 0);
+      mb.setPaintProperty(GBASE, 'raster-contrast', night ? -0.1 : 0);
+    } catch (e) {}
+  }
+
   /* ---------- style « GPS » : contraste net, sans agresser ---------- */
   function palette(mb, night) {
     function set(id, prop, val) { if (mb.getLayer(id)) mb.setPaintProperty(id, prop, val); }
@@ -1036,7 +1065,9 @@ var L = (function () {
   MBMap.prototype.getContainer = function () { return this.mb.getContainer(); };
   MBMap.prototype.setNight = function (on) {
     this._night = !!on;
-    if (this._ready) { try { palette(this.mb, this._night); } catch (e) {} }
+    if (this._ready) {
+      try { palette(this.mb, this._night); } catch (e) {}
+    }
     return this;
   };
   MBMap.prototype.invalidateSize = function () { this.mb.resize(); return this; };
@@ -1674,6 +1705,44 @@ var L = (function () {
       return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
   }
 
+  /* BRouter (brouter.de) : moteur libre réglé pour les sentiers. Son profil
+     « hiking-beta » (à pied) et « trekking » (à vélo) emprunte les chemins de terre,
+     les layons et les traversées de champ que les moteurs routiers évitent.
+     On l'ajoute comme candidat : jamais moins bien que Valhalla, parfois bien mieux. */
+  function brouterRoute(from, to, profile) {
+    var url = 'https://brouter.de/brouter?lonlats=' + from.lon + ',' + from.lat + '|' +
+      to.lon + ',' + to.lat + '&profile=' + profile + '&alternativeidx=0&format=geojson';
+    return fetchTimeout(url, null, 12000).then(function (r) {
+      if (!r.ok) throw new Error('brouter ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var f = (d.features || [])[0];
+      if (!f || !f.geometry) throw new Error('brouter vide');
+      var co = f.geometry.coordinates;
+      var pts = co.map(function (c) { return [c[1], c[0]]; });
+      var cum = [0];
+      for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
+      /* BRouter ne fournit pas de consignes en français : on les fabrique à partir
+         des changements de direction, comme le copilote du mode rallye */
+      var steps = [], lastAt = -999;
+      for (var k = 2; k < pts.length - 2; k++) {
+        if (cum[k] - lastAt < 45) continue;
+        var b1 = bearing(pts[k - 2], pts[k]);
+        var b2 = bearing(pts[k], pts[k + 2]);
+        var turn = ((b2 - b1 + 540) % 360) - 180;
+        if (Math.abs(turn) < 38) continue;
+        steps.push({
+          text: (Math.abs(turn) > 100 ? 'Tournez fortement ' : 'Tournez ') + (turn > 0 ? 'à droite' : 'à gauche'),
+          at: cum[k], type: turn > 0 ? 20 : 19, street: ''
+        });
+        lastAt = cum[k];
+      }
+      var length = cum[cum.length - 1];
+      var time = (f.properties && f.properties['total-time']) ? Number(f.properties['total-time']) : length / 1.25;
+      return { pts: pts, cum: cum, length: length, time: time, steps: steps, main: '', engine: 'brouter' };
+    });
+  }
+
   /* À pied et à vélo : Valhalla sait proposer plusieurs trajets différents
      (`alternates`). On demande aussi l'OSRM pour ne jamais rater le plus court. */
   function valhallaMulti(from, to, extra) {
@@ -1712,9 +1781,11 @@ var L = (function () {
     });
 
     var osrm = osrmRoute(from, to, extra).then(function (r) { return [r]; }).catch(function () { return []; });
+    var brProf = (extra && extra.costing) === 'bicycle' ? 'trekking' : 'hiking-beta';
+    var bro = brouterRoute(from, to, brProf).then(function (r) { return [r]; }).catch(function () { return []; });
 
-    return Promise.all([valh, osrm]).then(function (both) {
-      var all = both[0].concat(both[1]);
+    return Promise.all([valh, osrm, bro]).then(function (both) {
+      var all = both[0].concat(both[1]).concat(both[2]);
       /* on ne garde que les trajets vraiment différents (200 m et 1 min d'écart) */
       var keep = [];
       all.sort(function (a, b) { return a.time - b.time; });
