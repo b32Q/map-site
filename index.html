@@ -504,6 +504,22 @@
   .set-note{margin:12px 2px 4px;font-size:12px;line-height:1.5;color:var(--muted)}
   .ovl-head{gap:6px}
   .ovl-head h3{flex:1}
+  /* ---------- sélecteur de véhicule (pastille bleue) ---------- */
+  .vehmenu{position:absolute;right:14px;bottom:calc(var(--sheet-h,220px) + 64px);z-index:960;
+    background:#fff;border-radius:16px;padding:6px;min-width:186px;
+    box-shadow:0 16px 34px -16px rgba(11,18,32,.5),0 0 0 1px rgba(11,18,32,.07);
+    display:flex;flex-direction:column;gap:2px;
+    animation:vmIn .16s cubic-bezier(.2,.9,.25,1)}
+  @keyframes vmIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .vehmenu[hidden]{display:none}
+  .vehmenu button{display:flex;align-items:center;gap:11px;height:44px;padding:0 12px;border-radius:11px;
+    background:none;border:0;font-size:14.5px;font-weight:560;color:var(--text);cursor:pointer;text-align:left}
+  .vehmenu button svg{width:21px;height:21px;flex:none;color:#475467}
+  .vehmenu button[aria-pressed="true"]{background:var(--blue-soft,#eaf1ff);color:#1d4ed8}
+  .vehmenu button[aria-pressed="true"] svg{color:#1d4ed8}
+  body.night .vehmenu{background:#1b222c;box-shadow:0 16px 34px -16px #000,0 0 0 1px rgba(255,255,255,.08)}
+  body.night .vehmenu button{color:#e7ecf3}
+  body.night .vehmenu button[aria-pressed="true"]{background:#1d3a6b;color:#c7d8ff}
 </style>
 </head>
 <body>
@@ -607,6 +623,13 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    
+    <div class="vehmenu" id="vehmenu" hidden>
+      <button type="button" data-veh="auto" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg><span>Voiture</span></button>
+      <button type="button" data-veh="bicycle" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17l4-7h4M12 17l-2-5"/></svg><span>Vélo</span></button>
+      <button type="button" data-veh="pedestrian" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg><span>À pied</span></button>
+    </div>
 
     <button class="vehpill" id="vehpill" type="button" aria-label="Changer de type de véhicule">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
@@ -718,8 +741,8 @@
           </div>
 
           <div class="set-panel" data-panel="vehicle">
-            <div id="avoids-wrap">
-              <div class="seg" id="seg-costing">
+            <p class="sec-title">Véhicule</p>
+            <div class="seg" id="seg-costing">
                 <button type="button" data-costing="auto" aria-pressed="true">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M4 16v-3l2-5h12l2 5v3"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>
                   Voiture
@@ -732,10 +755,12 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="13" cy="5" r="2"/><path d="M12 9l-2 5 3 2v4M10 14l-2 4M15 11l2 2"/></svg>
                   À pied
                 </button>
-              </div>
             </div>
-            <p class="sec-title">À éviter</p>
-            <div class="set-card" id="avoids"></div>
+            <div id="avoids-wrap">
+              <p class="sec-title">À éviter</p>
+              <div class="set-card" id="avoids"></div>
+            </div>
+            <p class="set-note" id="avoid-note" hidden>Les options « à éviter » (péages, autoroutes, ferry) ne concernent que la voiture.</p>
             <p class="set-note">Le vélo et la marche empruntent les pistes cyclables et les chemins piétons.</p>
           </div>
 
@@ -1512,6 +1537,11 @@ var L = (function () {
   function prefsExtra(override) {
     var p = state.prefs;
     var o = { costing: p.costing };
+    if (p.costing === 'bicycle') {
+      o.costing_options = { bicycle: {
+        use_roads: 0.4, use_hills: 0.3, avoid_bad_surfaces: 0.3, bss_return_penalty: 0
+      } };
+    }
     if (p.costing === 'auto') {
       var a = {};
       if (p.tolls) a.use_tolls = 0;
@@ -1554,6 +1584,25 @@ var L = (function () {
      automatiquement sur OSRM (autre service public gratuit, mêmes données OSM).
      L'application ne reste donc jamais sans itinéraire. */
   function valhalla(from, to, extra) {
+    var cost = (extra && extra.costing) || 'auto';
+    /* À pied et à vélo : les deux moteurs travaillent en parallèle et on garde le
+       trajet le plus court en temps. Aucun des deux ne peut « allonger » le chemin
+       de l'autre, et si l'un tombe, l'autre répond. */
+    if (cost !== 'auto') {
+      return Promise.all([
+        valhallaTry(from, to, extra).catch(function () { return null; }),
+        osrmRoute(from, to, extra).catch(function () { return null; })
+      ]).then(function (list) {
+        var ok = list.filter(Boolean);
+        if (!ok.length) throw new Error('aucun itinéraire');
+        ok.sort(function (a, b) {
+          var dt = (a.time || 0) - (b.time || 0);
+          return Math.abs(dt) > 60 ? dt : (a.length - b.length);
+        });
+        ok[0].engine = ok[0] === list[0] ? 'valhalla' : 'osrm';
+        return ok[0];
+      });
+    }
     return valhallaTry(from, to, extra).catch(function (e) {
       try { console.warn('Valhalla indisponible (' + e.message + ') → repli OSRM'); } catch (_) {}
       return osrmRoute(from, to, extra);
@@ -1574,8 +1623,13 @@ var L = (function () {
       if (!r.ok) throw new Error('route ' + r.status);
       return r.json();
     }).then(function (d) {
-      var trip = d.trip;
-      if (!trip) throw new Error('pas d’itinéraire');
+      if (!d.trip) throw new Error('pas d’itinéraire');
+      return parseTrip(d.trip);
+    });
+  }
+
+  /* transforme un trajet Valhalla en objet utilisable par l'application */
+  function parseTrip(trip) {
       var leg = trip.legs[0];
       var pts = decodeShape(leg.shape);
       /* au-delà de ~4000 points, on garde un point tous les 12 m : invisible à l'écran,
@@ -1618,6 +1672,45 @@ var L = (function () {
         if (st.street && seg > bestD) { bestD = seg; main = st.street; }
       });
       return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
+  }
+
+  /* À pied et à vélo : Valhalla sait proposer plusieurs trajets différents
+     (`alternates`). On demande aussi l'OSRM pour ne jamais rater le plus court. */
+  function valhallaMulti(from, to, extra) {
+    var body = {
+      locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
+      costing: (extra && extra.costing) || 'pedestrian',
+      units: 'kilometers',
+      directions_options: { language: 'fr-FR', units: 'kilometers' },
+      alternates: 3
+    };
+    if (extra) for (var k in extra) body[k] = extra[k];
+    var valh = fetchTimeout('https://valhalla1.openstreetmap.de/route', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }, 8000).then(function (r) {
+      if (!r.ok) throw new Error('route ' + r.status);
+      return r.json();
+    }).then(function (d) {
+      var list = [];
+      if (d.trip) list.push(parseTrip(d.trip));
+      (d.alternates || []).forEach(function (a) { if (a.trip) list.push(parseTrip(a.trip)); });
+      return list;
+    }).catch(function () { return []; });
+
+    var osrm = osrmRoute(from, to, extra).then(function (r) { return [r]; }).catch(function () { return []; });
+
+    return Promise.all([valh, osrm]).then(function (both) {
+      var all = both[0].concat(both[1]);
+      /* on ne garde que les trajets vraiment différents (200 m et 1 min d'écart) */
+      var keep = [];
+      all.sort(function (a, b) { return a.time - b.time; });
+      all.forEach(function (r) {
+        var same = keep.some(function (k) {
+          return Math.abs(k.length - r.length) < 200 && Math.abs(k.time - r.time) < 60;
+        });
+        if (!same) keep.push(r);
+      });
+      return keep.slice(0, 3);
     });
   }
 
@@ -2607,7 +2700,9 @@ var L = (function () {
   /* ---------- itinéraires ---------- */
   function variantsFor() {
     var list = [{ label: 'Ton itinéraire', extra: prefsExtra() }];
-    if (state.prefs.costing !== 'auto') return list;
+    if (state.prefs.costing !== 'auto') {
+      return [{ label: state.prefs.costing === 'bicycle' ? 'À vélo' : 'À pied', extra: prefsExtra(), multi: true }];
+    }
     if (state.prefs.tolls || state.prefs.highways) {
       list.push({ label: 'Par les grands axes', extra: { costing: 'auto' } });
     } else {
@@ -2633,20 +2728,28 @@ var L = (function () {
     destMarker = L.marker([dest.lat, dest.lon], { icon: destIcon(dest.name), zIndexOffset: 400 }).addTo(map);
 
     Promise.all(variantsFor().map(function (v) {
-      return valhalla(state.pos, dest, v.extra).then(function (r) {
-        r.label = v.label; r.extra = v.extra; return r;
-      }).catch(function () { return null; });
-    })).then(function (list) {
-      var ok = list.filter(Boolean);
+      var job = v.multi
+        ? valhallaMulti(state.pos, dest, v.extra)
+        : valhalla(state.pos, dest, v.extra).then(function (r) { return [r]; });
+      return job.then(function (list) {
+        return (list || []).map(function (r) { r.label = v.label; r.extra = v.extra; return r; });
+      }).catch(function () { return []; });
+    })).then(function (lists) {
+      var ok = [];
+      lists.forEach(function (l) { ok = ok.concat(l || []); });
       if (!ok.length) { renderError('Le calcul a échoué — vérifie la connexion internet.'); return; }
       var keep = [];
       ok.forEach(function (r) {
         var same = keep.some(function (k) { return Math.abs(k.length - r.length) < 60 && Math.abs(k.time - r.time) < 40; });
         if (!same) keep.push(r);
       });
+      keep.sort(function (a, b) { return a.time - b.time; });
       if (keep.length > 1) {
-        var best = keep.reduce(function (m, r) { return r.time < m.time ? r : m; }, keep[0]);
-        keep.forEach(function (r) { r.label = r === best ? 'Le plus rapide' : r.label.replace('Ton itinéraire', 'Plus long'); });
+        keep.forEach(function (r, i) {
+          if (i === 0) r.label = 'Le plus rapide';
+          else if (r.label === 'À pied' || r.label === 'À vélo') r.label = 'Autre chemin';
+          else r.label = r.label.replace('Ton itinéraire', 'Plus long');
+        });
       }
       state.routes = keep;
       state.sel = 0;
@@ -3681,11 +3784,14 @@ var L = (function () {
   }
   function renderAvoids() {
     var wrap = document.getElementById('avoids');
+    var note = document.getElementById('avoid-note');
     if (state.prefs.costing !== 'auto') {
       document.getElementById('avoids-wrap').hidden = true;
+      if (note) note.hidden = false;
       return;
     }
     document.getElementById('avoids-wrap').hidden = false;
+    if (note) note.hidden = true;
 
     /* deux réglages courants, les deux autres derrière « Plus d'options » */
     var extrasOn = state.prefs.ferry || state.prefs.tracks;
@@ -3730,9 +3836,50 @@ var L = (function () {
     if (t) t.textContent = COST_LABEL[state.prefs.costing] || 'Voiture';
     p.hidden = !!state.navigating;
   }
+  /* la pastille ouvre une petite liste : voiture, vélo, à pied */
+  function vehMenu() { return document.getElementById('vehmenu'); }
+  function closeVehMenu() { var m = vehMenu(); if (m) m.hidden = true; }
+  function openVehMenu() {
+    var m = vehMenu();
+    if (!m) return;
+    Array.prototype.forEach.call(m.querySelectorAll('[data-veh]'), function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.veh === state.prefs.costing));
+    });
+    m.hidden = false;
+  }
   (function wireVehPill() {
     var p = document.getElementById('vehpill');
-    if (p) p.addEventListener('click', openOpts);
+    if (!p) return;
+    p.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var m = vehMenu();
+      if (!m) return;
+      if (m.hidden) openVehMenu(); else closeVehMenu();
+    });
+    var m = vehMenu();
+    if (m) {
+      Array.prototype.forEach.call(m.querySelectorAll('[data-veh]'), function (b) {
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var mode = b.dataset.veh;
+          closeVehMenu();
+          if (mode === state.prefs.costing) return;
+          state.prefs.costing = mode;
+          savePrefs();
+          Array.prototype.forEach.call(document.querySelectorAll('#seg-costing button'), function (o) {
+            o.setAttribute('aria-pressed', String(o.dataset.costing === mode));
+          });
+          updateVehPill();
+          renderAvoids();
+          toast(mode === 'auto' ? 'Itinéraires en voiture' : mode === 'bicycle' ? 'Itinéraires à vélo' : 'Itinéraires à pied');
+          if (state.dest) recompute();
+        });
+      });
+      document.addEventListener('click', function (e) {
+        if (!m.hidden && !m.contains(e.target)) closeVehMenu();
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeVehMenu(); });
+    }
   })();
 
   function openOpts() {
