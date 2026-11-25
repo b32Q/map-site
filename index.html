@@ -435,7 +435,19 @@
   .zc-bar[hidden]{display:none}
   .zc-bar i{display:block;height:100%;width:0%;border-radius:99px;
     background:linear-gradient(90deg,#fb923c,#ea580c);transition:width .35s linear}
-  .fixpt{display:inline-block;margin:2px 0 8px;color:#1b6ef3;font:600 13px/1.2 -apple-system,system-ui,sans-serif;background:none;border:0;padding:0;cursor:pointer}
+  .steps{margin:12px 0 4px;border:1px solid #eceff3;border-radius:14px;padding:6px 10px 8px;background:#fbfcfd}
+.srow{display:flex;align-items:center;gap:10px;padding:7px 0;min-height:34px}
+.sdot{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
+.sdot.st{background:#1b6ef3;box-shadow:0 0 0 3px rgba(27,110,243,.15)}
+.sdot.en{background:#e5484d;box-shadow:0 0 0 3px rgba(229,72,77,.15)}
+.sdot.num{width:20px;height:20px;flex:0 0 20px;background:#fff;border:2px solid #1b6ef3;color:#1b6ef3;
+    font:700 11px/16px -apple-system,system-ui,sans-serif;text-align:center;border-radius:50%}
+.stxt{flex:1;font-size:14px;color:var(--text,#0b1220);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sx{width:30px;height:30px;border:0;background:none;color:#8a94a6;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.sx:active{background:#eef2f7}
+.addstep{display:flex;align-items:center;gap:6px;width:100%;min-height:38px;margin-top:4px;border:0;
+    background:none;color:#1b6ef3;font:600 13.5px/1 -apple-system,system-ui,sans-serif;padding:6px 2px}
+.fixpt{display:inline-block;margin:2px 0 8px;color:#1b6ef3;font:600 13px/1.2 -apple-system,system-ui,sans-serif;background:none;border:0;padding:0;cursor:pointer}
 .gmbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;
     min-height:44px;margin-top:8px;border:1px solid var(--line,#e5e7eb);background:#fff;
     color:#1b6ef3;font:600 14px/1 -apple-system,system-ui,sans-serif;border-radius:12px;cursor:pointer}
@@ -1307,7 +1319,8 @@ var L = (function () {
     pos: null, posLabel: '', posDenied: false, centered: false, pickMode: 'dest', geoError: 0,
     fix: null, gpsLive: false, gpsWatch: null, ri: 0, lastReroute: 0, offCount: 0,
     recents: [],
-    vias: []
+    vias: [],
+    placingVia: false
   };
 
   var map = L.map('map', { center: FRANCE, zoom: 5, minZoom: 4 });
@@ -1366,43 +1379,69 @@ var L = (function () {
   try { window.__map = map; } catch (e) {}
 
   /* ---------- lieux affichés sur la carte ----------
-     Gares, parkings, hôpitaux et pharmacies, écrits en clair : ils apparaissent en
-     zoomant, à partir du niveau de la ville. Les données viennent des tuiles elles-mêmes
-     (couche « poi »), donc aucun appel réseau supplémentaire. */
+     Une couche par famille, chacune avec son propre niveau de zoom : la gare apparaît de
+     loin (c'est un repère de navigation), la pharmacie seulement au niveau de la rue —
+     sinon les pharmacies noient tout le reste. */
+  var POI_CLASSES = [
+    { key: 'ph', cls: 'pharmacy', color: '#10b981', dotZ: 15.6, labZ: 16.4, size: [10.5, 12] },
+    { key: 'pk', cls: 'parking',  color: '#4b5563', dotZ: 13.8, labZ: 15.0, size: [11, 12.5], letter: 'P' },
+    { key: 'hp', cls: 'hospital', color: '#e5484d', dotZ: 12.8, labZ: 13.8, size: [11, 13] },
+    { key: 'gr', cls: 'railway',  color: '#1a73e8', dotZ: 11.8, labZ: 12.6, size: [11.5, 13.5] }
+  ];
   function addPoiLayers() {
     var mb = map.mb;
     if (!mb || !mb.getStyle || !mb.isStyleLoaded || !mb.isStyleLoaded()) return;
-    try {
-      if (mb.getLayer('poi-dot') || !mb.getSource('openmaptiles')) return;
-      var F = ['all',
-        ['in', ['get', 'class'], ['literal', ['railway', 'parking', 'hospital', 'pharmacy']]],
-        ['has', 'name']];
-      mb.addLayer({
-        id: 'poi-dot', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi',
-        minzoom: 13, filter: F,
-        paint: {
-          'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 2.4, 17, 4.6],
-          'circle-color': ['match', ['get', 'class'],
-            'railway', '#1a73e8', 'parking', '#4b5563',
-            'hospital', '#e5484d', 'pharmacy', '#10b981', '#4b5563'],
-          'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.2
+    if (!mb.getSource('openmaptiles')) return;
+    POI_CLASSES.forEach(function (c) {
+      try {
+        var F = ['all', ['==', ['get', 'class'], c.cls], ['has', 'name']];
+        if (!mb.getLayer('poi-' + c.key + '-dot')) {
+          mb.addLayer({
+            id: 'poi-' + c.key + '-dot', type: 'circle', source: 'openmaptiles',
+            'source-layer': 'poi', minzoom: c.dotZ, filter: F,
+            paint: {
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], c.dotZ,
+                c.letter ? 5.2 : 2.6, 17, c.letter ? 7 : 4.8],
+              'circle-color': c.color,
+              'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.3,
+              'circle-opacity': 0.95
+            }
+          });
         }
-      });
-      mb.addLayer({
-        id: 'poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi',
-        minzoom: 14.5, filter: F,
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-size': ['interpolate', ['linear'], ['zoom'], 14.5, 10.5, 18, 13],
-          'text-offset': [0, 0.85], 'text-anchor': 'top',
-          'text-font': ['Noto Sans Regular'],
-          'text-max-width': 9, 'text-line-height': 1.05, 'text-justify': 'center',
-          'text-optional': true, 'text-padding': 2,
-          'symbol-sort-key': ['to-number', ['get', 'rank'], 5]
-        },
-        paint: { 'text-color': '#0b1220', 'text-halo-color': '#ffffff', 'text-halo-width': 1.9 }
-      });
-    } catch (e) {}
+        if (c.letter && !mb.getLayer('poi-' + c.key + '-letter')) {
+          mb.addLayer({
+            id: 'poi-' + c.key + '-letter', type: 'symbol', source: 'openmaptiles',
+            'source-layer': 'poi', minzoom: c.dotZ, filter: F,
+            layout: {
+              'text-field': c.letter, 'text-font': ['Noto Sans Regular'],
+              'text-size': ['interpolate', ['linear'], ['zoom'], c.dotZ, 7, 17, 9],
+              'text-anchor': 'center', 'text-offset': [0, 0],
+              'text-allow-overlap': true, 'text-ignore-placement': true
+            },
+            paint: { 'text-color': '#ffffff' }
+          });
+        }
+        if (!mb.getLayer('poi-' + c.key + '-lab')) {
+          mb.addLayer({
+            id: 'poi-' + c.key + '-lab', type: 'symbol', source: 'openmaptiles',
+            'source-layer': 'poi', minzoom: c.labZ, filter: F,
+            layout: {
+              'text-field': c.key === 'pk'
+                ? ['case', ['in', 'Parking', ['get', 'name']], ['get', 'name'],
+                    ['concat', 'Parking ', ['get', 'name']]]
+                : ['get', 'name'],
+              'text-size': ['interpolate', ['linear'], ['zoom'], c.labZ, c.size[0], 18, c.size[1]],
+              'text-offset': [0, 0.8], 'text-anchor': 'top',
+              'text-font': ['Noto Sans Regular'],
+              'text-max-width': 9, 'text-line-height': 1.05, 'text-justify': 'center',
+              'text-optional': true, 'text-padding': 3,
+              'symbol-sort-key': ['to-number', ['get', 'rank'], 9]
+            },
+            paint: { 'text-color': '#0b1220', 'text-halo-color': '#ffffff', 'text-halo-width': 1.9 }
+          });
+        }
+      } catch (e) {}
+    });
   }
   map.mb.on('load', addPoiLayers);
   map.mb.on('idle', addPoiLayers);
@@ -3101,14 +3140,24 @@ var L = (function () {
       try { viaMarks.push(L.marker([v.lat, v.lon], { icon: icon, zIndexOffset: 300 }).addTo(map)); } catch (e) {}
     });
   }
+  /* nom lisible d'un point touché (« Rue du Guil », sinon « Point sur la carte ») */
+  function nomDuPoint(lat, lon, cb) {
+    var u = 'https://api-adresse.data.gouv.fr/reverse/?lon=' + lon + '&lat=' + lat;
+    fetchTimeout(u, null, 5000).then(function (r) { return r.json(); }).then(function (d) {
+      var f = (d.features || [])[0];
+      var lab = f && f.properties ? (f.properties.name || f.properties.label || '') : '';
+      cb(lab ? lab.replace(/^\d+\s*/, '') : 'Point sur la carte');
+    }).catch(function () { cb('Point sur la carte'); });
+  }
   function addVia(lat, lon) {
     if (!state.dest || !state.routes || !state.routes.length) return;
     if (!state.vias) state.vias = [];
     if (state.vias.length >= 4) { toast('Quatre étapes au maximum'); return; }
-    state.vias.push({ lat: lat, lon: lon });
+    var v = { lat: lat, lon: lon, label: 'Point sur la carte' };
+    state.vias.push(v);
     drawViaMarks();
-    toast('Étape ajoutée — itinéraire recalculé');
     startRoutes(state.dest, true);
+    nomDuPoint(lat, lon, function (nom) { v.label = nom; renderRoutes(); });
   }
   /* un appui sur une étape déjà posée la retire */
   function viaAuToucher(lat, lon) {
@@ -3189,13 +3238,22 @@ var L = (function () {
     if (state.routes.length === 1 && state.prefs.costing === 'auto') {
       h += '<p class="note1">Une seule route pertinente sur ce trajet : les variantes passent par les mêmes rues. Sur un trajet plus long, plusieurs propositions apparaissent.</p>';
     }
-    if ((state.vias || []).length) {
-      h += '<div class="vias-row"><span>' + state.vias.length +
-        (state.vias.length > 1 ? ' étapes ajoutées' : ' étape ajoutée') + '</span>' +
-        '<button class="linkbtn" id="clear-vias" type="button">Effacer les étapes</button></div>';
-    } else {
-      h += '<p class="note1">Tu peux toucher la carte pour imposer un passage : l’itinéraire sera recalculé en passant par ce point.</p>';
-    }
+    /* ---------- le trajet, étape par étape ---------- */
+    h += '<div class="steps">';
+    h += '<div class="srow"><span class="sdot st"></span><span class="stxt">' +
+      escapeHtml(state.posLabel || 'Départ') + '</span></div>';
+    (state.vias || []).forEach(function (v, i) {
+      h += '<div class="srow"><span class="sdot num">' + (i + 1) + '</span>' +
+        '<span class="stxt">' + escapeHtml(v.label || 'Point sur la carte') + '</span>' +
+        '<button class="sx" type="button" data-via="' + i + '" aria-label="Retirer cette étape">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="15" height="15"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>';
+    });
+    h += '<div class="srow"><span class="sdot en"></span><span class="stxt">' +
+      escapeHtml(state.dest.name) + '</span></div>';
+    h += '<button class="addstep" id="add-via" type="button">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg>' +
+      ' Ajouter une étape</button>';
+    h += '</div>';
     h += '<button class="go" id="start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>Démarrer</button>' +
       '<a class="gmbtn" id="gm-check" href="' + escapeHtml(googleDirUrl(state.dest)) +
       '" rel="noopener">' +
@@ -3206,8 +3264,17 @@ var L = (function () {
       b.addEventListener('click', function () { selectRoute(Number(b.dataset.route)); });
     });
     document.getElementById('start').addEventListener('click', startNav);
-    var cv = document.getElementById('clear-vias');
-    if (cv) cv.addEventListener('click', clearVias);
+    var av = document.getElementById('add-via');
+    if (av) av.addEventListener('click', function () {
+      state.placingVia = true;
+      toast('Touche la carte à l’endroit où tu veux passer');
+    });
+    Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-via]'), function (b) {
+      b.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        removeVia(Number(b.dataset.via));
+      });
+    });
     var fx = document.getElementById('fix-dest');
     if (fx) fx.addEventListener('click', function () {
       state.placingDest = true;
@@ -4769,25 +4836,21 @@ var L = (function () {
   map.on('click', function (e) {
     hideSuggestions();
     /* un itinéraire est affiché : le point touché devient une étape obligatoire */
+    /* la carte ne réagit à un appui que si l'on est en train de placer quelque chose */
+    var ll = (e && e.latlng) || null;
+    if (!ll) return;
     if (state.placingDest) {
-      var pl = (e && e.latlng) || null;
-      if (pl) {
-        state.placingDest = false;
-        state.dest = { name: state.dest.name, sub: 'point corrigé', lat: pl.lat, lon: pl.lng };
-        if (destMarker) { try { map.removeLayer(destMarker); } catch (er) {} }
-        destMarker = L.marker([pl.lat, pl.lng], { icon: destIcon(state.dest.name), zIndexOffset: 400 }).addTo(map);
-        toast('Point d’arrivée corrigé');
-        startRoutes(state.dest, true);
-      }
+      state.placingDest = false;
+      state.dest = { name: state.dest.name, sub: 'point corrigé', lat: ll.lat, lon: ll.lng };
+      if (destMarker) { try { map.removeLayer(destMarker); } catch (er) {} }
+      destMarker = L.marker([ll.lat, ll.lng], { icon: destIcon(state.dest.name), zIndexOffset: 400 }).addTo(map);
+      toast('Point d’arrivée corrigé');
+      startRoutes(state.dest, true);
       return;
     }
-    if (state.dest && state.routes && state.routes.length) {
-      var ll = (e && e.latlng) || null;
-      if (ll) {
-        var deja = viaAuToucher(ll.lat, ll.lng);
-        if (deja >= 0) removeVia(deja);      /* appui sur une étape : on l'enlève */
-        else addVia(ll.lat, ll.lng);
-      }
+    if (state.placingVia) {
+      state.placingVia = false;
+      addVia(ll.lat, ll.lng);
     }
   });
 
