@@ -1575,8 +1575,10 @@ var L = (function () {
     }
     if (p.costing === 'auto') {
       var a = {};
-      if (p.tolls) a.use_tolls = 0;
-      if (p.highways) a.use_highways = 0;
+      /* En France l'autoroute est payante : « éviter les péages » doit donc aussi
+         écarter les autoroutes, sinon le moteur renvoie le même trajet à péage
+         (son réglage use_tolls ne fait que le déconseiller, il ne l'interdit pas). */
+      if (p.tolls || p.highways) { a.use_tolls = 0; a.use_highways = 0; }
       if (p.ferry) a.use_ferry = 0;
       if (p.tracks) a.use_tracks = 0;
       if (Object.keys(a).length) o.costing_options = { auto: a };
@@ -1589,8 +1591,7 @@ var L = (function () {
     var v = p.costing === 'bicycle' ? 'Vélo' : p.costing === 'pedestrian' ? 'À pied' : 'Voiture';
     var av = [];
     if (p.costing === 'auto') {
-      if (p.tolls) av.push('sans péage');
-      if (p.highways) av.push('sans autoroute');
+      if (p.tolls || p.highways) av.push('sans autoroute ni péage');
       if (p.ferry) av.push('sans bac');
       if (p.tracks) av.push('sans chemin');
     }
@@ -1887,16 +1888,16 @@ var L = (function () {
   function osrmRoute(from, to, extra) {
     var cost = (extra && extra.costing) || 'auto';
     var prof = cost === 'bicycle' ? 'bike' : cost === 'pedestrian' ? 'foot' : 'car';
-    var excl = [], co = extra && extra.costing_options && extra.costing_options.auto;
-    if (co) {
-      if (co.use_tolls === 0) excl.push('toll');
-      if (co.use_highways === 0) excl.push('motorway');
-      if (co.use_ferry === 0) excl.push('ferry');
+    var co = extra && extra.costing_options && extra.costing_options.auto;
+    /* Le service OSRM public refuse le paramètre « exclude » (erreur 400) : quand on
+       demande d'éviter autoroutes ou péages, il ne sait pas le faire. On le laisse donc
+       de côté et c'est Valhalla, qui gère ces options, qui répond. */
+    if (co && (co.use_tolls === 0 || co.use_highways === 0)) {
+      return Promise.reject(new Error('osrm ne sait pas éviter les autoroutes'));
     }
     var url = 'https://routing.openstreetmap.de/routed-' + prof + '/route/v1/driving/' +
       from.lon + ',' + from.lat + ';' + to.lon + ',' + to.lat +
-      '?overview=full&geometries=geojson&steps=true' +
-      (excl.length ? '&exclude=' + excl.join(',') : '');
+      '?overview=full&geometries=geojson&steps=true';
     return fetchTimeout(url, null, 10000).then(function (r) {
       if (!r.ok) throw new Error('osrm ' + r.status);
       return r.json();
@@ -2841,15 +2842,16 @@ var L = (function () {
 
   /* ---------- itinéraires ---------- */
   function variantsFor() {
-    var list = [{ label: 'Ton itinéraire', extra: prefsExtra() }];
+    var avoidOn = state.prefs.tolls || state.prefs.highways;
+    var list = [{ label: avoidOn ? 'Sans autoroute ni péage' : 'Ton itinéraire', extra: prefsExtra() }];
     if (state.prefs.costing !== 'auto') {
       return [{ label: state.prefs.costing === 'bicycle' ? 'À vélo' : 'À pied', extra: prefsExtra(), multi: true }];
     }
-    if (state.prefs.tolls || state.prefs.highways) {
-      list.push({ label: 'Par les grands axes', extra: { costing: 'auto' } });
-    } else {
-      list.push({ label: 'Sans péage', extra: { costing: 'auto', costing_options: { auto: { use_tolls: 0 } } } });
-      list.push({ label: 'Sans autoroute', extra: { costing: 'auto', costing_options: { auto: { use_highways: 0 } } } });
+    /* Si on demande à éviter les autoroutes, on ne propose surtout pas la variante
+       « grands axes » : c'était elle qui remettait le trajet à péage en tête. */
+    if (!(state.prefs.tolls || state.prefs.highways)) {
+      list.push({ label: 'Sans autoroute ni péage', extra: { costing: 'auto',
+        costing_options: { auto: { use_tolls: 0, use_highways: 0 } } } });
     }
     return list;
   }
@@ -3928,10 +3930,9 @@ var L = (function () {
 
   /* ---------- options ---------- */
   var AVOIDS = [
-    { key: 'tolls', label: 'Éviter les péages', hint: 'routes à péage' },
-    { key: 'highways', label: 'Éviter les autoroutes', hint: 'voies rapides' },
-    { key: 'ferry', label: 'Éviter les bacs', hint: 'traversées en bateau' },
-    { key: 'tracks', label: 'Éviter les chemins non goudronnés', hint: 'pistes et chemins' }
+    { key: 'tolls', label: 'Éviter les autoroutes et péages', hint: 'voies rapides et routes payantes' },
+    { key: 'tracks', label: 'Éviter les chemins non goudronnés', hint: 'pistes et chemins' },
+    { key: 'ferry', label: 'Éviter les bacs', hint: 'traversées en bateau' }
   ];
 
   function avoidRow(a) {
