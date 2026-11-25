@@ -435,7 +435,11 @@
   .zc-bar[hidden]{display:none}
   .zc-bar i{display:block;height:100%;width:0%;border-radius:99px;
     background:linear-gradient(90deg,#fb923c,#ea580c);transition:width .35s linear}
-  .viamark{width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid #1b6ef3;
+  .gmbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;
+    min-height:44px;margin-top:8px;border:1px solid var(--line,#e5e7eb);background:#fff;
+    color:#1b6ef3;font:600 14px/1 -apple-system,system-ui,sans-serif;border-radius:12px;cursor:pointer}
+.gmbtn svg{width:18px;height:18px}
+.viamark{width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid #1b6ef3;
     color:#1b6ef3;font:700 12px/20px -apple-system,system-ui,sans-serif;text-align:center;
     box-shadow:0 2px 8px rgba(11,18,32,.35)}
 .vias-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
@@ -3132,6 +3136,31 @@ var L = (function () {
     if (state.dest) startRoutes(state.dest, true);
   }
 
+  /* ---------- filet de sécurité : ouvrir la destination dans Google Maps ----------
+     On envoie le TEXTE (nom + ville), pas nos coordonnées : Google refait sa propre
+     recherche avec ses données. Si son point tombe ailleurs que le nôtre, c'est le nôtre
+     qui est faux — et la navigation se fait chez lui. */
+  function googleDirUrl(dest) {
+    var txt = String(dest.name || '').trim();
+    var sub = String(dest.sub || '').trim();
+    if (sub.toLowerCase() === 'gare sncf') {
+      /* « Gare SNCF » n'est pas une adresse pour Google : on précise juste « gare » */
+      if (!/gare/i.test(txt)) txt = 'gare ' + txt;
+    } else if (sub && txt.toLowerCase().indexOf(sub.toLowerCase()) === -1) {
+      txt += ', ' + sub;
+    }
+    var mode = state.prefs.costing === 'pedestrian' ? 'walking'
+             : state.prefs.costing === 'bicycle' ? 'bicycling' : 'driving';
+    return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(txt) +
+           '&travelmode=' + mode;
+  }
+  function openGoogleDir() {
+    if (!state.dest) return;
+    var url = googleDirUrl(state.dest);
+    try { window.open(url, '_blank', 'noopener'); }
+    catch (e) { location.href = url; }
+  }
+
   function renderRoutes() {
     state.phase = 'routes';
     var best = state.routes.reduce(function (m, r) { return r.time < m.time ? r : m; }, state.routes[0]);
@@ -3166,7 +3195,11 @@ var L = (function () {
     } else {
       h += '<p class="note1">Tu peux toucher la carte pour imposer un passage : l’itinéraire sera recalculé en passant par ce point.</p>';
     }
-    h += '<button class="go" id="start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>Démarrer</button></div>';
+    h += '<button class="go" id="start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>Démarrer</button>' +
+      '<a class="gmbtn" id="gm-check" href="' + escapeHtml(googleDirUrl(state.dest)) +
+      '" target="_blank" rel="noopener">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>' +
+      'Vérifier sur Google Maps</a></div>';
     sheetBody.innerHTML = h;
     Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-route]'), function (b) {
       b.addEventListener('click', function () { selectRoute(Number(b.dataset.route)); });
@@ -3174,6 +3207,7 @@ var L = (function () {
     document.getElementById('start').addEventListener('click', startNav);
     var cv = document.getElementById('clear-vias');
     if (cv) cv.addEventListener('click', clearVias);
+
     var s2 = document.getElementById('start2');
     if (s2) s2.addEventListener('click', startNav);
     setSheetHeight();
@@ -4147,7 +4181,7 @@ var L = (function () {
 
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); }, startRoutes: startRoutes, allCams: allCameras, buildZones: buildZones, search: searchPlaces, commune: communeSeule, ville: villeDemandee, norm: norm, src: { ban: banPlaces, nomi: nominatimPlaces, photon: photonPlaces, rank: rankPlaces } };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); }, startRoutes: startRoutes, allCams: allCameras, buildZones: buildZones, search: searchPlaces, gmap: googleDirUrl, commune: communeSeule, ville: villeDemandee, norm: norm, src: { ban: banPlaces, nomi: nominatimPlaces, photon: photonPlaces, rank: rankPlaces } };
   }
   requestAnimationFrame(loop);
 
