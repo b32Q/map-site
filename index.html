@@ -1973,6 +1973,14 @@ var L = (function () {
       if (['natural', 'tourism', 'historic', 'leisure'].indexOf(p.class) > -1) score += 50;
       /* le lieu qui porte le nom de sa commune passe devant une attraction homonyme */
       if (n && norm(subTxt).indexOf(n) > -1) score += 45;
+      /* la ville écrite dans la demande doit se retrouver dans le résultat :
+         « mairie de rennes » ne doit pas donner « Mairie de Renescure »,
+         « carrefour market guillestre » ne doit pas donner un magasin parisien. */
+      var STOP = { de: 1, du: 1, des: 1, la: 1, le: 1, les: 1, en: 1, sur: 1, sous: 1, et: 1, a: 1, au: 1, aux: 1, d: 1, l: 1 };
+      var subToks = norm(subTxt).split(/[^a-z0-9]+/).filter(Boolean);
+      var qToks = q.split(/[^a-z0-9]+/).filter(function (w) { return w.length > 2 && !STOP[w]; });
+      var villeDansSub = qToks.some(function (w) { return subToks.indexOf(w) > -1; });
+      if (villeDansSub) score += 200;
       if (p.type === 'house' || p.type === 'railway' || p.class === 'railway') score += 5;
       /* l'importance du lieu (Nominatim) : une ville passe devant un hameau homonyme */
       score += Math.min(120, (p.importance || 0) * 150);
@@ -2156,7 +2164,9 @@ var L = (function () {
   /* Photon (komoot) : géocodeur libre, sans clé et sans limite serrée.
      Sert de secours quand Nominatim ne répond pas (il limite à 1 requête/s). */
   function photonPlaces(term) {
-    var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(term) + '&lang=fr&limit=8';
+    /* on donne la position de l'utilisateur en indice : « vieux port marseille » ne doit
+       pas sortir le village de Vieux-Port en Normandie quand on est dans le Sud */
+    var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(term) + '&lang=fr&limit=12';
     return fetch(url).then(function (r) { return r.json(); }).then(function (d) {
       return (d.features || []).filter(function (f) {
         var c = f.properties && f.properties.countrycode;
@@ -2331,6 +2341,22 @@ var L = (function () {
       .catch(function () { return []; });
   }
 
+  /* « vieux port marseille » sortait le village de Vieux-Port en Normandie : le dernier
+     mot d'une recherche est presque toujours la ville. On vérifie qu'il s'agit bien d'une
+     commune, puis on ne garde que les résultats qui s'y trouvent. */
+  function derniereCommune(term) {
+    var toks = norm(term).split(/[^a-z0-9]+/).filter(function (w) { return w.length > 3; });
+    if (toks.length < 2) return Promise.resolve(null);
+    var last = toks[toks.length - 1];
+    var u = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(last) +
+            '&fields=nom&limit=1&boost=population';
+    return fetchTimeout(u, null, 5000).then(function (r) { return r.json(); }).then(function (d) {
+      var f = (d || [])[0];
+      if (!f || norm(f.nom) !== last) return null;
+      return last;
+    }).catch(function () { return null; });
+  }
+
   function searchPlaces(term) {
     var seq = ++searchSeq;
     var wantNum = !!typedNumber(term) || /\b\d{5}\b/.test(String(term));
@@ -2338,8 +2364,10 @@ var L = (function () {
     var jobs = [fetchBoth(term)].concat(variants.map(function (v) { return fetchBoth(v); }));
     var wantsGare = /\bgare/i.test(norm(term));
 
-    return Promise.all([Promise.all(jobs), wantsGare ? garePlaces(term) : Promise.resolve([])]).then(function (both) {
-      var all = both[0], gares = both[1] || [];
+    var cityJob = derniereCommune(term);
+    return Promise.all([Promise.all(jobs), wantsGare ? garePlaces(term) : Promise.resolve([]), cityJob])
+      .then(function (both) {
+      var all = both[0], gares = both[1] || [], cityFilter = both[2];
       /* une recherche remplacée n'est pas jetée : l'interface filtre elle-même sur le texte courant */
       function pack(res, factor, q) {
         var ban = (res[0] || []).map(function (p) { p.score = (p.score || 0) * factor; return p; });
@@ -2383,6 +2411,18 @@ var L = (function () {
         });
         ban.sort(function (a, b) { return b.score - a.score; });
         places.sort(function (a, b) { return b.score - a.score; });
+      }
+
+      /* si la demande finit par une ville, on écarte ce qui n'y est pas */
+      if (cityFilter) {
+        var dansVille = function (p) {
+          var t = norm((p.sub || '') + ' ' + (p.name || '')).split(/[^a-z0-9]+/);
+          return t.indexOf(cityFilter) > -1;
+        };
+        var garde = places.filter(dansVille);
+        if (garde.length) places = garde;
+        var gardeB = ban.filter(dansVille);
+        if (gardeB.length) ban = gardeB;
       }
 
       /* les vraies gares passent devant tout le reste */
