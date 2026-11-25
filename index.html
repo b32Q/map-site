@@ -1360,6 +1360,48 @@ var L = (function () {
 
   try { window.__map = map; } catch (e) {}
 
+  /* ---------- lieux affichés sur la carte ----------
+     Gares, parkings, hôpitaux et pharmacies, écrits en clair : ils apparaissent en
+     zoomant, à partir du niveau de la ville. Les données viennent des tuiles elles-mêmes
+     (couche « poi »), donc aucun appel réseau supplémentaire. */
+  function addPoiLayers() {
+    var mb = map.mb;
+    if (!mb || !mb.getStyle || !mb.isStyleLoaded || !mb.isStyleLoaded()) return;
+    try {
+      if (mb.getLayer('poi-dot') || !mb.getSource('openmaptiles')) return;
+      var F = ['all',
+        ['in', ['get', 'class'], ['literal', ['railway', 'parking', 'hospital', 'pharmacy']]],
+        ['has', 'name']];
+      mb.addLayer({
+        id: 'poi-dot', type: 'circle', source: 'openmaptiles', 'source-layer': 'poi',
+        minzoom: 13, filter: F,
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 2.4, 17, 4.6],
+          'circle-color': ['match', ['get', 'class'],
+            'railway', '#1a73e8', 'parking', '#4b5563',
+            'hospital', '#e5484d', 'pharmacy', '#10b981', '#4b5563'],
+          'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.2
+        }
+      });
+      mb.addLayer({
+        id: 'poi-label', type: 'symbol', source: 'openmaptiles', 'source-layer': 'poi',
+        minzoom: 14.5, filter: F,
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 14.5, 10.5, 18, 13],
+          'text-offset': [0, 0.85], 'text-anchor': 'top',
+          'text-font': ['Noto Sans Regular'],
+          'text-max-width': 9, 'text-line-height': 1.05, 'text-justify': 'center',
+          'text-optional': true, 'text-padding': 2,
+          'symbol-sort-key': ['to-number', ['get', 'rank'], 5]
+        },
+        paint: { 'text-color': '#0b1220', 'text-halo-color': '#ffffff', 'text-halo-width': 1.9 }
+      });
+    } catch (e) {}
+  }
+  map.mb.on('load', addPoiLayers);
+  map.mb.on('idle', addPoiLayers);
+
   var me = L.marker(FRANCE, {
     icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [20, 20], iconAnchor: [10, 10] }),
     interactive: false, keyboard: false
