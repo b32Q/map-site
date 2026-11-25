@@ -3063,6 +3063,27 @@ var L = (function () {
     toast('Étape ajoutée — itinéraire recalculé');
     startRoutes(state.dest, true);
   }
+  /* un appui sur une étape déjà posée la retire */
+  function viaAuToucher(lat, lon) {
+    var vias = state.vias || [];
+    if (!vias.length) return -1;
+    var z = 14;
+    try { z = map.getZoom(); } catch (e) {}
+    var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
+    var lim = 34 * mpp;                     /* 34 pixels autour du rond */
+    for (var i = 0; i < vias.length; i++) {
+      if (haversine([vias[i].lat, vias[i].lon], [lat, lon]) < lim) return i;
+    }
+    return -1;
+  }
+  function removeVia(i) {
+    if (!state.vias || i < 0 || i >= state.vias.length) return;
+    state.vias.splice(i, 1);
+    drawViaMarks();
+    toast('Étape supprimée');
+    if (state.dest) startRoutes(state.dest, true);
+  }
+
   function clearVias() {
     state.vias = [];
     clearViaMarks();
@@ -4657,9 +4678,13 @@ var L = (function () {
   map.on('click', function (e) {
     hideSuggestions();
     /* un itinéraire est affiché : le point touché devient une étape obligatoire */
-    if (state.dest && state.routes && state.routes.length && state.phase === 'routes') {
+    if (state.dest && state.routes && state.routes.length) {
       var ll = (e && e.latlng) || null;
-      if (ll) addVia(ll.lat, ll.lng);
+      if (ll) {
+        var deja = viaAuToucher(ll.lat, ll.lng);
+        if (deja >= 0) removeVia(deja);      /* appui sur une étape : on l'enlève */
+        else addVia(ll.lat, ll.lng);
+      }
     }
   });
 
