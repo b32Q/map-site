@@ -2341,19 +2341,117 @@ var L = (function () {
       .catch(function () { return []; });
   }
 
-  /* « vieux port marseille » sortait le village de Vieux-Port en Normandie : le dernier
-     mot d'une recherche est presque toujours la ville. On vérifie qu'il s'agit bien d'une
-     commune, puis on ne garde que les résultats qui s'y trouvent. */
-  function derniereCommune(term) {
-    var toks = norm(term).split(/[^a-z0-9]+/).filter(function (w) { return w.length > 3; });
+  /* « mairie de saint-flour », « vieux port marseille » : la fin de la demande est une ville.
+     On essaie les 3, 2 puis 1 derniers mots comme nom de commune (geo.api.gouv.fr, officiel). */
+  function villeDemandee(term) {
+    var toks = norm(term).split(/[^a-z0-9]+/).filter(Boolean);
     if (toks.length < 2) return Promise.resolve(null);
-    var last = toks[toks.length - 1];
-    var u = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(last) +
-            '&fields=nom&limit=1&boost=population';
+    var essais = [];
+    [3, 2, 1].forEach(function (n) {
+      if (toks.length > n) essais.push({ n: n, c: toks.slice(-n).join(' ') });
+    });
+    return Promise.all(essais.map(function (e) {
+      var u = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(e.c) +
+              '&fields=nom,centre,population&limit=1&boost=population';
+      return fetchTimeout(u, null, 5000).then(function (r) { return r.json(); }).then(function (d) {
+        var f = (d || [])[0];
+        if (!f || !f.centre || !f.centre.coordinates) return null;
+        /* norm() laisse le tiret dans « Saint-Flour » alors que la demande est découpée
+           en mots : on compare sans tiret des deux côtés */
+        var nomFlat = String(norm(f.nom)).replace(/[^a-z0-9]+/g, ' ').trim();
+        var exact = nomFlat === e.c;
+        /* « sarlat » doit trouver Sarlat-la-Canéda, « conques » Conques-en-Rouergue */
+        var prefixe = !exact && e.c.length >= 4 && nomFlat.indexOf(e.c + ' ') === 0;
+        if (!exact && !prefixe) return null;
+        return { nom: e.c, lat: f.centre.coordinates[1], lon: f.centre.coordinates[0], n: e.n };
+      }).catch(function () { return null; });
+    })).then(function (list) {
+      var ok = list.filter(Boolean);
+      if (!ok.length) return null;
+      ok.sort(function (a, b) { return b.n - a.n; });   /* la ville la plus longue d'abord */
+      return ok[0];
+    }).catch(function () { return null; });
+  }
+
+  /* les lieux cherchés autour du centre de la ville (« mairie », « église », « pharmacie »).
+     Nominatim borné à une petite fenêtre autour de la ville : les homonymes d'autres
+     départements ne peuvent plus sortir. */
+  function photonVille(mots, ville) {
+    if (!mots) return Promise.resolve([]);
+    var d = 0.10;
+    var vb = [ville.lon - d, ville.lat + d, ville.lon + d, ville.lat - d].join(',');
+    var u = 'https://nominatim.openstreetmap.org/search?format=json&limit=12&addressdetails=1' +
+            '&accept-language=fr&countrycodes=fr&bounded=1&viewbox=' + vb +
+            '&q=' + encodeURIComponent(mots);
+    /* on préfère le bâtiment au nom de rue : « mairie de Saint-Flour » est un bâtiment
+       municipal, pas la « Place de la Mairie » d'un village voisin */
+    var veut = { mairie: 'townhall', 'hotel de ville': 'townhall', eglise: 'place_of_worship',
+                 pharmacie: 'pharmacy', ecole: 'school', poste: 'post_office',
+                 bibliotheque: 'library', musee: 'museum', gare: 'station' };
+    var cle = String(mots || '').toLowerCase().replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+    var typeVoulu = veut[cle] || null;
+    return fetchTimeout(u, { headers: { 'Accept-Language': 'fr' } }, 7000)
+      .then(function (r) { return r.json(); }).then(function (list) {
+        return (list || []).map(function (p) {
+          var ad = p.address || {};
+          var city = ad.city || ad.town || ad.village || ad.municipality || '';
+          var t = (p.type || '').toLowerCase(), c = (p.class || '').toLowerCase();
+          var bonus = 0;
+          if (typeVoulu && t === typeVoulu) bonus += 300;
+          if (c === 'highway') bonus -= 150;
+          return {
+            name: (p.name || (p.display_name || '').split(',')[0] || '').trim(),
+            sub: [ad.postcode, city].filter(Boolean).join(' '),
+            lat: parseFloat(p.lat), lon: parseFloat(p.lon),
+            type: p.type || 'place', class: p.class || 'place',
+            postcode: ad.postcode || '', city: city, importance: p.importance || 0.3,
+            _bonus: bonus
+          };
+        }).filter(function (p) {
+          return isFinite(p.lat) && isFinite(p.lon) &&
+                 haversine([ville.lat, ville.lon], [p.lat, p.lon]) < 12000;
+        }).sort(function (a, b) { return b._bonus - a._bonus; });
+      }).catch(function () { return []; });
+  }
+
+  /* « Sisteron » tout seul : la première proposition doit être le centre-ville,
+     les suivantes gardent l'ordre habituel (les lieux les plus demandés d'abord). */
+  function communeSeule(term) {
+    var t = String(term).trim();
+    if (/\d/.test(t)) return Promise.resolve(null);
+    var mots = norm(t).split(/[^a-z0-9]+/).filter(Boolean);
+    if (!mots.length || mots.length > 2) return Promise.resolve(null);
+    var u = 'https://geo.api.gouv.fr/communes?nom=' + encodeURIComponent(mots.join(' ')) +
+            '&fields=nom,centre,population&limit=1&boost=population';
     return fetchTimeout(u, null, 5000).then(function (r) { return r.json(); }).then(function (d) {
       var f = (d || [])[0];
-      if (!f || norm(f.nom) !== last) return null;
-      return last;
+      if (!f || !f.centre || !f.centre.coordinates) return null;
+      var flat = String(norm(f.nom)).replace(/[^a-z0-9]+/g, ' ').trim();
+      if (flat !== mots.join(' ')) return null;
+      /* le « centre » de geo.api est le barycentre de la commune : à Guillestre il tombe
+         4 km à l'est, dans la montagne. On préfère le point du bourg (Photon, place). */
+      /* le « centre » de geo.api est le barycentre de la commune : à Guillestre il tombe
+         4 km à l'est, dans la montagne. On prend le point du bourg donné par Nominatim. */
+      var u2 = 'https://nominatim.openstreetmap.org/search?format=json&limit=3&countrycodes=fr' +
+               '&accept-language=fr&q=' + encodeURIComponent(f.nom);
+      return fetchTimeout(u2, { headers: { 'Accept-Language': 'fr' } }, 6000)
+        .then(function (r) { return r.json(); }).then(function (d2) {
+        var bourg = null;
+        (d2 || []).forEach(function (p3) {
+          if (bourg) return;
+          var nomPt = String(norm(p3.name || '')).replace(/[^a-z0-9]+/g, ' ').trim();
+          if (nomPt === flat && (p3.class === 'place' || p3.class === 'boundary')) {
+            bourg = [parseFloat(p3.lon), parseFloat(p3.lat)];
+          }
+        });
+        return { nom: flat, vraiNom: f.nom,
+                 lat: bourg ? bourg[1] : f.centre.coordinates[1],
+                 lon: bourg ? bourg[0] : f.centre.coordinates[0],
+                 pop: f.population || 0 };
+      }).catch(function () {
+        return { nom: flat, vraiNom: f.nom, lat: f.centre.coordinates[1],
+                 lon: f.centre.coordinates[0], pop: f.population || 0 };
+      });
     }).catch(function () { return null; });
   }
 
@@ -2364,10 +2462,18 @@ var L = (function () {
     var jobs = [fetchBoth(term)].concat(variants.map(function (v) { return fetchBoth(v); }));
     var wantsGare = /\bgare/i.test(norm(term));
 
-    var cityJob = derniereCommune(term);
-    return Promise.all([Promise.all(jobs), wantsGare ? garePlaces(term) : Promise.resolve([]), cityJob])
+    var cityJob = villeDemandee(term);
+    var autourJob = cityJob.then(function (v) {
+      if (!v) return [];
+      var mots = norm(term).split(/[^a-z0-9]+/).filter(Boolean).slice(0, -v.n).join(' ');
+      return photonVille(mots, v);
+    });
+    return Promise.all([Promise.all(jobs), wantsGare ? garePlaces(term) : Promise.resolve([]),
+                        cityJob, autourJob, communeSeule(term)])
       .then(function (both) {
-      var all = both[0], gares = both[1] || [], cityFilter = both[2];
+      var all = both[0], gares = both[1] || [], ville = both[2], autour = both[3] || [],
+          commune = both[4] || null;
+      var cityFilter = ville ? ville.nom : null;
       /* une recherche remplacée n'est pas jetée : l'interface filtre elle-même sur le texte courant */
       function pack(res, factor, q) {
         var ban = (res[0] || []).map(function (p) { p.score = (p.score || 0) * factor; return p; });
@@ -2413,6 +2519,32 @@ var L = (function () {
         places.sort(function (a, b) { return b.score - a.score; });
       }
 
+      if (ville) {
+        var proche = function (p) {
+          return Math.abs(p.lat - ville.lat) < 0.08 && Math.abs(p.lon - ville.lon) < 0.1;
+        };
+        var dansLaVille = function (p) {
+          var t = String(norm((p.sub || '') + ' ' + (p.city || p.name || ''))).replace(/[^a-z0-9]+/g, ' ');
+          return t.indexOf(ville.nom) > -1;
+        };
+        var autourV = (autour || []).filter(proche).filter(dansLaVille);
+        var gpV = places.filter(proche).filter(dansLaVille);
+        var gbV = ban.filter(proche).filter(dansLaVille);
+        if (autourV.length) {
+          autourV.forEach(function (p, k) { p.score = (p.score || 0) + 480 - k; });
+          places = autourV.concat(gpV);
+        } else if (gpV.length) {
+          places = gpV;
+        } else {
+          /* rien dans la ville : on propose la ville elle-même, jamais un village voisin */
+          places = [{
+            name: ville.nom.replace(/(^|\s)\S/g, function (m) { return m.toUpperCase(); }),
+            sub: '', lat: ville.lat, lon: ville.lon, kind: 'town', cls: 'place', score: 470
+          }];
+        }
+        if (gbV.length) ban = gbV;
+      }
+
       /* si la demande finit par une ville, on écarte ce qui n'y est pas */
       if (cityFilter) {
         var dansVille = function (p) {
@@ -2442,7 +2574,25 @@ var L = (function () {
         });
         if (!dup) out.push(p);
       });
-      return out.slice(0, 6);
+      var fin = out.slice(0, 6);
+      /* la ville tapée seule : le centre-ville passe en premier, le reste suit */
+      if (commune) {
+        /* on ne garde que ce qui est dans la commune : « Route de Sisteron » à Aix ou
+           « Allée de Sisteron » à Colomiers n'ont rien à faire dans la liste */
+        fin = fin.filter(function (p2) {
+          if (!p2) return false;
+          var memeNom = String(norm(p2.name || '')).replace(/[^a-z0-9]+/g, ' ').trim() === commune.nom;
+          if (memeNom) return false;                      /* doublon du centre-ville */
+          return Math.abs(p2.lat - commune.lat) < 0.15 && Math.abs(p2.lon - commune.lon) < 0.2;
+        });
+        fin.unshift({
+          name: commune.vraiNom || commune.nom,
+          sub: 'centre-ville',
+          lat: commune.lat, lon: commune.lon,
+          kind: 'city', cls: 'place', score: 1000
+        });
+      }
+      return fin;
     });
   }
 
@@ -3879,7 +4029,7 @@ var L = (function () {
 
   /* point d'accès de mise au point (uniquement avec ?debug=1) : sert aux essais */
   if (/[?&]debug=1/.test(location.search)) {
-    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); }, startRoutes: startRoutes, allCams: allCameras, buildZones: buildZones, search: searchPlaces, src: { ban: banPlaces, nomi: nominatimPlaces, photon: photonPlaces, rank: rankPlaces } };
+    window.__dbg = { state: state, arrive: arrive, startNav: startNav, zones: function () { return zones; }, theme: applyTheme, rally: function () { return rally; }, notes: function () { return buildPaceNotes(state.route || state.routes[state.sel]); }, startRoutes: startRoutes, allCams: allCameras, buildZones: buildZones, search: searchPlaces, commune: communeSeule, ville: villeDemandee, norm: norm, src: { ban: banPlaces, nomi: nominatimPlaces, photon: photonPlaces, rank: rankPlaces } };
   }
   requestAnimationFrame(loop);
 
