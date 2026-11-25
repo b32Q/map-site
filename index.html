@@ -1748,9 +1748,9 @@ var L = (function () {
      « hiking-beta » (à pied) et « trekking » (à vélo) emprunte les chemins de terre,
      les layons et les traversées de champ que les moteurs routiers évitent.
      On l'ajoute comme candidat : jamais moins bien que Valhalla, parfois bien mieux. */
-  function brouterRoute(from, to, profile) {
+  function brouterRoute(from, to, profile, alt) {
     var url = 'https://brouter.de/brouter?lonlats=' + from.lon + ',' + from.lat + '|' +
-      to.lon + ',' + to.lat + '&profile=' + profile + '&alternativeidx=0&format=geojson';
+      to.lon + ',' + to.lat + '&profile=' + profile + '&alternativeidx=' + (alt || 0) + '&format=geojson';
     return fetchTimeout(url, null, 12000).then(function (r) {
       if (!r.ok) throw new Error('brouter ' + r.status);
       return r.json();
@@ -1826,7 +1826,9 @@ var L = (function () {
     var brProf = bike ? 'trekking' : 'hiking-beta';
     var bro = Promise.all([
       brouterRoute(from, to, bike ? 'trekking' : 'hiking-beta').catch(function () { return null; }),
-      brouterRoute(from, to, bike ? 'fastbike' : 'shortest').catch(function () { return null; })
+      brouterRoute(from, to, bike ? 'fastbike' : 'shortest').catch(function () { return null; }),
+      /* deuxième proposition, comme Google : un autre trajet du même moteur */
+      brouterRoute(from, to, bike ? 'fastbike' : 'shortest', 1).catch(function () { return null; })
     ]).then(function (l) { return l.filter(Boolean); });
 
     return Promise.all([valh, osrm, bro]).then(function (both) {
@@ -1839,7 +1841,7 @@ var L = (function () {
            les « détours inutiles » proposés à pied (Valhalla part parfois sur la
            grande route alors qu'un chemin fait 30 % de moins). */
         var best = list.length ? list[0].length : 0;
-        if (best > 0) list = list.filter(function (r) { return r.length <= best * 1.15; });
+        if (best > 0) list = list.filter(function (r) { return r.length <= best * 1.35; });
         list.forEach(function (r) {
           var same = keep.some(function (k) {
             return Math.abs(k.length - r.length) < 100;
