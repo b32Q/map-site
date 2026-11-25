@@ -1835,9 +1835,14 @@ var L = (function () {
       function dedupe(list) {
         var keep = [];
         list.sort(function (a, b) { return a.length - b.length; });
+        /* On jette les trajets nettement plus longs que le meilleur : c'étaient eux
+           les « détours inutiles » proposés à pied (Valhalla part parfois sur la
+           grande route alors qu'un chemin fait 30 % de moins). */
+        var best = list.length ? list[0].length : 0;
+        if (best > 0) list = list.filter(function (r) { return r.length <= best * 1.15; });
         list.forEach(function (r) {
           var same = keep.some(function (k) {
-            return Math.abs(k.length - r.length) < 200 && Math.abs(k.time - r.time) < 60;
+            return Math.abs(k.length - r.length) < 100;
           });
           if (!same) keep.push(r);
         });
