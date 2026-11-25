@@ -435,7 +435,13 @@
   .zc-bar[hidden]{display:none}
   .zc-bar i{display:block;height:100%;width:0%;border-radius:99px;
     background:linear-gradient(90deg,#fb923c,#ea580c);transition:width .35s linear}
-  .ztri{filter:drop-shadow(0 3px 5px rgba(11,18,32,.32))}
+  .viamark{width:26px;height:26px;border-radius:50%;background:#fff;border:3px solid #1b6ef3;
+    color:#1b6ef3;font:700 12px/20px -apple-system,system-ui,sans-serif;text-align:center;
+    box-shadow:0 2px 8px rgba(11,18,32,.35)}
+.vias-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 2px 2px;font-size:13px;color:var(--muted)}
+.vias-row .linkbtn{color:#1b6ef3;font-weight:600}
+.ztri{filter:drop-shadow(0 3px 5px rgba(11,18,32,.32))}
   .ztri-b{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;
     background:#fff7ed;box-shadow:0 0 0 1.5px rgba(154,52,18,.45)}
   .ztri svg{width:19px;height:19px;display:block}
@@ -1295,7 +1301,8 @@ var L = (function () {
     planTs: null,
     pos: null, posLabel: '', posDenied: false, centered: false, pickMode: 'dest', geoError: 0,
     fix: null, gpsLive: false, gpsWatch: null, ri: 0, lastReroute: 0, offCount: 0,
-    recents: []
+    recents: [],
+    vias: []
   };
 
   var map = L.map('map', { center: FRANCE, zoom: 5, minZoom: 4 });
@@ -1642,8 +1649,11 @@ var L = (function () {
   }
 
   function valhallaTry(from, to, extra) {
+    var locs = [{ lat: from.lat, lon: from.lon }];
+    (state.vias || []).forEach(function (v) { locs.push({ lat: v.lat, lon: v.lon }); });
+    locs.push({ lat: to.lat, lon: to.lon });
     var body = {
-      locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
+      locations: locs,
       costing: 'auto',
       units: 'kilometers',
       directions_options: { language: 'fr-FR', units: 'kilometers' }
@@ -1662,48 +1672,40 @@ var L = (function () {
 
   /* transforme un trajet Valhalla en objet utilisable par l'application */
   function parseTrip(trip) {
-      var leg = trip.legs[0];
-      var pts = decodeShape(leg.shape);
-      /* au-delà de ~4000 points, on garde un point tous les 12 m : invisible à l'écran,
-         beaucoup plus léger à redessiner (le canevas redessine tout à chaque zoom).
-         `origin` conserve l'indice d'origine de chaque point gardé, pour retrouver la
-         position des consignes de guidage après l'allègement. */
-      var origin = null;
-      /* Depuis le passage au rendu vectoriel, la carte dessine des dizaines de milliers
-         de points sans effort : on n'allège plus que les tracés vraiment énormes, et
-         seulement d'un point tous les 4 m — sinon, à l'échelle de la rue, le tracé
-         coupe les virages et paraît filer en ligne droite. */
-      if (pts.length > 20000) {
-        var thin = [pts[0]], idxs = [0], lastP = pts[0];
-        for (var k = 1; k < pts.length - 1; k++) {
-          if (haversine(lastP, pts[k]) >= 4) { thin.push(pts[k]); idxs.push(k); lastP = pts[k]; }
-        }
-        thin.push(pts[pts.length - 1]); idxs.push(pts.length - 1);
-        pts = thin; origin = idxs;
-      }
-      function shapeToNew(i) {
-        if (!origin) return Math.min(i, pts.length - 1);
-        var lo = 0, hi = origin.length - 1;
-        while (lo < hi) { var mid = (lo + hi) >> 1; if (origin[mid] < i) lo = mid + 1; else hi = mid; }
-        return lo;
-      }
-      var cum = [0];
-      for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
-      var steps = (leg.maneuvers || []).map(function (m) {
-        return {
-          text: m.instruction || '',
-          at: cum[shapeToNew(m.begin_shape_index || 0)] || 0,
-          type: m.type,
+    /* un trajet avec étapes arrive en plusieurs « legs » : on les met bout à bout,
+       sinon seul le premier tronçon serait dessiné */
+    var legs = trip.legs || [];
+    var pts = [], legStart = [];
+    legs.forEach(function (leg) {
+      var lp = decodeShape(leg.shape);
+      if (!lp.length) { legStart.push(pts.length); return; }
+      if (pts.length && haversine(pts[pts.length - 1], lp[0]) < 1.5) lp = lp.slice(1);
+      legStart.push(pts.length);
+      pts = pts.concat(lp);
+    });
+    if (!pts.length) throw new Error('tracé vide');
+    var cum = [0];
+    for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
+    var steps = [];
+    legs.forEach(function (leg, li) {
+      (leg.maneuvers || []).forEach(function (m) {
+        var txt = m.instruction || '';
+        if (!txt) return;
+        var idx = Math.min(pts.length - 1, legStart[li] + (m.begin_shape_index || 0));
+        steps.push({
+          text: txt, at: cum[idx] || 0, type: m.type,
           street: (m.street_names && m.street_names[0]) || ''
-        };
-      }).filter(function (s) { return s.text; });
-      var totalD = cum[cum.length - 1];
-      var main = '', bestD = 0;
-      steps.forEach(function (st, i) {
-        var seg = (steps[i + 1] ? steps[i + 1].at : totalD) - st.at;
-        if (st.street && seg > bestD) { bestD = seg; main = st.street; }
+        });
       });
-      return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time, steps: steps, main: main };
+    });
+    steps.sort(function (a, b) { return a.at - b.at; });
+    var totalD = cum[cum.length - 1], main = '', bestD = 0;
+    steps.forEach(function (st, i) {
+      var seg = (steps[i + 1] ? steps[i + 1].at : totalD) - st.at;
+      if (st.street && seg > bestD) { bestD = seg; main = st.street; }
+    });
+    return { pts: pts, cum: cum, length: trip.summary.length * 1000, time: trip.summary.time,
+             steps: steps, main: main };
   }
 
   /* Trajet « dirigé » : on impose des points intermédiaires alignés sur la ligne
@@ -1749,8 +1751,11 @@ var L = (function () {
      les layons et les traversées de champ que les moteurs routiers évitent.
      On l'ajoute comme candidat : jamais moins bien que Valhalla, parfois bien mieux. */
   function brouterRoute(from, to, profile, alt) {
-    var url = 'https://brouter.de/brouter?lonlats=' + from.lon + ',' + from.lat + '|' +
-      to.lon + ',' + to.lat + '&profile=' + profile + '&alternativeidx=' + (alt || 0) + '&format=geojson';
+    var ll = from.lon + ',' + from.lat;
+    (state.vias || []).forEach(function (v) { ll += '|' + v.lon + ',' + v.lat; });
+    ll += '|' + to.lon + ',' + to.lat;
+    var url = 'https://brouter.de/brouter?lonlats=' + ll +
+      '&profile=' + profile + '&alternativeidx=' + (alt || 0) + '&format=geojson';
     return fetchTimeout(url, null, 12000).then(function (r) {
       if (!r.ok) throw new Error('brouter ' + r.status);
       return r.json();
@@ -1785,12 +1790,15 @@ var L = (function () {
   /* À pied et à vélo : Valhalla sait proposer plusieurs trajets différents
      (`alternates`). On demande aussi l'OSRM pour ne jamais rater le plus court. */
   function valhallaMulti(from, to, extra) {
+    var locs = [{ lat: from.lat, lon: from.lon }];
+    (state.vias || []).forEach(function (v) { locs.push({ lat: v.lat, lon: v.lon }); });
+    locs.push({ lat: to.lat, lon: to.lon });
     var body = {
-      locations: [{ lat: from.lat, lon: from.lon }, { lat: to.lat, lon: to.lon }],
+      locations: locs,
       costing: (extra && extra.costing) || 'pedestrian',
       units: 'kilometers',
       directions_options: { language: 'fr-FR', units: 'kilometers' },
-      alternates: 3
+      alternates: (state.vias && state.vias.length) ? 0 : 3
     };
     if (extra) for (var k in extra) body[k] = extra[k];
     function ask(extraOpts) {
@@ -1902,23 +1910,29 @@ var L = (function () {
     if (co && (co.use_tolls === 0 || co.use_highways === 0)) {
       return Promise.reject(new Error('osrm ne sait pas éviter les autoroutes'));
     }
+    var chaine = from.lon + ',' + from.lat;
+    (state.vias || []).forEach(function (v) { chaine += ';' + v.lon + ',' + v.lat; });
+    chaine += ';' + to.lon + ',' + to.lat;
     var url = 'https://routing.openstreetmap.de/routed-' + prof + '/route/v1/driving/' +
-      from.lon + ',' + from.lat + ';' + to.lon + ',' + to.lat +
-      '?overview=full&geometries=geojson&steps=true';
+      chaine + '?overview=full&geometries=geojson&steps=true';
     return fetchTimeout(url, null, 10000).then(function (r) {
       if (!r.ok) throw new Error('osrm ' + r.status);
       return r.json();
     }).then(function (d) {
       if (!d.routes || !d.routes.length) throw new Error('pas d’itinéraire');
-      var rt = d.routes[0], leg = rt.legs[0];
+      var rt = d.routes[0];
       var pts = rt.geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
       var cum = [0];
       for (var i = 1; i < pts.length; i++) cum.push(cum[i - 1] + haversine(pts[i - 1], pts[i]));
+      /* avec des étapes, OSRM renvoie plusieurs « legs » : on cumule leur distance
+         pour que les consignes restent à la bonne place sur le tracé */
       var at = 0, steps = [];
-      (leg.steps || []).forEach(function (st) {
-        var txt = osrmText(st);
-        if (txt) steps.push({ text: txt, at: at, type: osrmType(st), street: st.name || '' });
-        at += st.distance || 0;
+      (rt.legs || []).forEach(function (leg) {
+        (leg.steps || []).forEach(function (st) {
+          var txt = osrmText(st);
+          if (txt) steps.push({ text: txt, at: at, type: osrmType(st), street: st.name || '' });
+          at += st.distance || 0;
+        });
       });
       var main = '', bestD = 0;
       steps.forEach(function (st, i) {
@@ -3024,6 +3038,37 @@ var L = (function () {
     if (r) r.addEventListener('click', function () { if (state.dest) startRoutes(state.dest); else renderHome(); });
   }
 
+  /* ---------- étapes imposées par l'utilisateur ---------- */
+  var viaMarks = [];
+  function clearViaMarks() {
+    viaMarks.forEach(function (m) { try { map.removeLayer(m); } catch (e) {} });
+    viaMarks = [];
+  }
+  function drawViaMarks() {
+    clearViaMarks();
+    (state.vias || []).forEach(function (v, i) {
+      var icon = L.divIcon({
+        className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+        html: '<div class="viamark">' + (i + 1) + '</div>'
+      });
+      try { viaMarks.push(L.marker([v.lat, v.lon], { icon: icon, zIndexOffset: 300 }).addTo(map)); } catch (e) {}
+    });
+  }
+  function addVia(lat, lon) {
+    if (!state.dest || !state.routes || !state.routes.length) return;
+    if (!state.vias) state.vias = [];
+    if (state.vias.length >= 4) { toast('Quatre étapes au maximum'); return; }
+    state.vias.push({ lat: lat, lon: lon });
+    drawViaMarks();
+    toast('Étape ajoutée — itinéraire recalculé');
+    startRoutes(state.dest, true);
+  }
+  function clearVias() {
+    state.vias = [];
+    clearViaMarks();
+    if (state.dest) startRoutes(state.dest, true);
+  }
+
   function renderRoutes() {
     state.phase = 'routes';
     var best = state.routes.reduce(function (m, r) { return r.time < m.time ? r : m; }, state.routes[0]);
@@ -3051,12 +3096,21 @@ var L = (function () {
     if (state.routes.length === 1 && state.prefs.costing === 'auto') {
       h += '<p class="note1">Une seule route pertinente sur ce trajet : les variantes passent par les mêmes rues. Sur un trajet plus long, plusieurs propositions apparaissent.</p>';
     }
+    if ((state.vias || []).length) {
+      h += '<div class="vias-row"><span>' + state.vias.length +
+        (state.vias.length > 1 ? ' étapes ajoutées' : ' étape ajoutée') + '</span>' +
+        '<button class="linkbtn" id="clear-vias" type="button">Effacer les étapes</button></div>';
+    } else {
+      h += '<p class="note1">Tu peux toucher la carte pour imposer un passage : l’itinéraire sera recalculé en passant par ce point.</p>';
+    }
     h += '<button class="go" id="start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>Démarrer</button></div>';
     sheetBody.innerHTML = h;
     Array.prototype.forEach.call(sheetBody.querySelectorAll('[data-route]'), function (b) {
       b.addEventListener('click', function () { selectRoute(Number(b.dataset.route)); });
     });
     document.getElementById('start').addEventListener('click', startNav);
+    var cv = document.getElementById('clear-vias');
+    if (cv) cv.addEventListener('click', clearVias);
     var s2 = document.getElementById('start2');
     if (s2) s2.addEventListener('click', startNav);
     setSheetHeight();
@@ -3195,8 +3249,9 @@ var L = (function () {
     return list;
   }
 
-  function startRoutes(dest) {
+  function startRoutes(dest, keepVias) {
     hideSuggestions();
+    if (!keepVias) { state.vias = []; clearViaMarks(); }
     if (!state.pos) {
       toast('Position inconnue : autorise l’accès à ta position');
       locate();
@@ -4599,7 +4654,14 @@ var L = (function () {
   })();
 
   map.on('dragstart', function () { state.following = false; });
-  map.on('click', function () { hideSuggestions(); });
+  map.on('click', function (e) {
+    hideSuggestions();
+    /* un itinéraire est affiché : le point touché devient une étape obligatoire */
+    if (state.dest && state.routes && state.routes.length && state.phase === 'routes') {
+      var ll = (e && e.latlng) || null;
+      if (ll) addVia(ll.lat, ll.lng);
+    }
+  });
 
   function fitPhone() {
     var phone = document.querySelector('.phone');
