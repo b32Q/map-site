@@ -435,7 +435,8 @@
   .zc-bar[hidden]{display:none}
   .zc-bar i{display:block;height:100%;width:0%;border-radius:99px;
     background:linear-gradient(90deg,#fb923c,#ea580c);transition:width .35s linear}
-  .gmbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;
+  .fixpt{display:inline-block;margin:2px 0 8px;color:#1b6ef3;font:600 13px/1.2 -apple-system,system-ui,sans-serif;background:none;border:0;padding:0;cursor:pointer}
+.gmbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;text-decoration:none;
     min-height:44px;margin-top:8px;border:1px solid var(--line,#e5e7eb);background:#fff;
     color:#1b6ef3;font:600 14px/1 -apple-system,system-ui,sans-serif;border-radius:12px;cursor:pointer}
 .gmbtn svg{width:18px;height:18px}
@@ -3166,7 +3167,7 @@ var L = (function () {
     var best = state.routes.reduce(function (m, r) { return r.time < m.time ? r : m; }, state.routes[0]);
     var base = state.planTs || Date.now();
     var h = '<h2>' + escapeHtml(state.dest.name) + '</h2><p class="sub">' + escapeHtml(state.dest.sub || '') + '</p>' +
-      '';
+      '<button class="linkbtn fixpt" id="fix-dest" type="button">Ce n’est pas le bon endroit</button>' + '';
     if (state.planTs) h += '<br><span class="planline">Départ prévu ' + dayLabel(state.planTs) + '</span>';
     if (state.prefs.rally) h += '<span class="rallytag">Mode rallye · 3-2-1 au départ</span>';
 
@@ -3197,7 +3198,7 @@ var L = (function () {
     }
     h += '<button class="go" id="start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg>Démarrer</button>' +
       '<a class="gmbtn" id="gm-check" href="' + escapeHtml(googleDirUrl(state.dest)) +
-      '" target="_blank" rel="noopener">' +
+      '" rel="noopener">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>' +
       'Vérifier sur Google Maps</a></div>';
     sheetBody.innerHTML = h;
@@ -3207,6 +3208,20 @@ var L = (function () {
     document.getElementById('start').addEventListener('click', startNav);
     var cv = document.getElementById('clear-vias');
     if (cv) cv.addEventListener('click', clearVias);
+    var fx = document.getElementById('fix-dest');
+    if (fx) fx.addEventListener('click', function () {
+      state.placingDest = true;
+      toast('Touche la carte à l’endroit exact de ta destination');
+    });
+    var gmb = document.getElementById('gm-check');
+    if (gmb) gmb.addEventListener('click', function (ev) {
+      /* certains aperçus (Telegram, navigateur intégré) bloquent l'ouverture d'un
+         nouvel onglet : on force alors la navigation dans la page courante */
+      var href = gmb.getAttribute('href');
+      if (!href) return;
+      ev.preventDefault();
+      try { window.location.href = href; } catch (e) { location.assign(href); }
+    });
 
     var s2 = document.getElementById('start2');
     if (s2) s2.addEventListener('click', startNav);
@@ -4754,6 +4769,18 @@ var L = (function () {
   map.on('click', function (e) {
     hideSuggestions();
     /* un itinéraire est affiché : le point touché devient une étape obligatoire */
+    if (state.placingDest) {
+      var pl = (e && e.latlng) || null;
+      if (pl) {
+        state.placingDest = false;
+        state.dest = { name: state.dest.name, sub: 'point corrigé', lat: pl.lat, lon: pl.lng };
+        if (destMarker) { try { map.removeLayer(destMarker); } catch (er) {} }
+        destMarker = L.marker([pl.lat, pl.lng], { icon: destIcon(state.dest.name), zIndexOffset: 400 }).addTo(map);
+        toast('Point d’arrivée corrigé');
+        startRoutes(state.dest, true);
+      }
+      return;
+    }
     if (state.dest && state.routes && state.routes.length) {
       var ll = (e && e.latlng) || null;
       if (ll) {
